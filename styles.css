@@ -15,6 +15,9 @@ body {
     background-image: url('./img/Untitled_design_-_2022-06-03T165656.466.jpg');
     background-size: cover;
     background-position: center;
+    git add .
+git commit -m "corrige imagem do login"
+git push
 }
 
 .container {
