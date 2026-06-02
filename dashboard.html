@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>dashboard investidor</title>
+</head>
+<body class="dashboard-body" data-page="dashboard">
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-mark">INV</span>
+                <div class="brand-text">
+                    <span class="brand-title">investidor</span>
+                    <span class="brand-subtitle">painel</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="tab active" href="dashboard.html">visao geral</a>
+                <a class="tab" href="carteira.html">carteira</a>
+                <a class="tab" href="#">transacoes</a>
+                <a class="tab" href="#">relatorios</a>
+                <a class="tab" href="#">conta</a>
+                <a class="tab" href="#">configuracoes</a>
+            </nav>
+            <button class="logout-button" type="button" data-action="logout">sair</button>
+        </aside>
+
+        <main class="dashboard-content">
+            <header class="content-header">
+                <div>
+                    <p class="eyebrow">conta ativa</p>
+                    <h1>dashboard</h1>
+                    <p class="subtle">Bem vindo, <span data-user-email></span></p>
+                </div>
+                <div class="status-pill">online</div>
+            </header>
+
+            <section class="cards">
+                <article class="card">
+                    <p class="card-label">saldo total</p>
+                    <h2>R$ 0,000,00</h2>
+                    <p class="card-detail">+0% esta semana</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">ativos</p>
+                    <h2>0 </h2>
+                    <p class="card-detail">diversificacao ok</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">alertas</p>
+                    <h2>0</h2>
+                    <p class="card-detail">revisar metas</p>
+                </article>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>movimentos recentes</h3>
+                    <span class="panel-tag">hoje</span>
+                </div>
+                <div class="panel-grid">
+                    <div class="panel-item">
+                        <p class="panel-title">compra</p>
+                        <p class="panel-detail">R$ nenhuma açao</p>
+                    </div>
+                    <div class="panel-item">
+                        <p class="panel-title">dividendo</p>
+                        <p class="panel-detail">R$ 0,00 recebido</p>
+                    </div>
+                    <div class="panel-item">
+                        <p class="panel-title">alerta</p>
+                        <p class="panel-detail">meta mensal atualizada</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js" defer></script>
+</body>
+</html>

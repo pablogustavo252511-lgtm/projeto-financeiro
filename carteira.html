@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>carteira investidor</title>
+</head>
+<body class="dashboard-body" data-page="carteira">
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-mark">INV</span>
+                <div class="brand-text">
+                    <span class="brand-title">investidor</span>
+                    <span class="brand-subtitle">painel</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="tab" href="dashboard.html">visao geral</a>
+                <a class="tab active" href="carteira.html">carteira</a>
+                <a class="tab" href="#">transacoes</a>
+                <a class="tab" href="#">relatorios</a>
+                <a class="tab" href="#">conta</a>
+                <a class="tab" href="#">configuracoes</a>
+            </nav>
+            <button class="logout-button" type="button" data-action="logout">sair</button>
+        </aside>
+
+        <main class="dashboard-content">
+            <header class="content-header">
+                <div>
+                    <p class="eyebrow">conta ativa</p>
+                    <h1>carteira</h1>
+                    <p class="subtle">Bem vindo, <span data-user-email></span></p>
+                </div>
+                <div class="header-actions">
+                    <button class="action-button" type="button" data-action="open-invest">adicionar investimento</button>
+                    <div class="status-pill">online</div>
+                </div>
+            </header>
+            <div class="modal-overlay" data-modal="invest">
+                <form class="modal-card" role="dialog" aria-modal="true" aria-labelledby="invest-title" data-form="investment">
+                    <div class="modal-header">
+                        <h2 id="invest-title">adicionar investimento</h2>
+                        <button class="modal-close" type="button" data-action="close-invest" aria-label="fechar">x</button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="invest-type">tipo de investimento</label>
+                        <select id="invest-type" name="type" required>
+                            <option value="renda-fixa">renda fixa</option>
+                            <option value="acoes">acoes</option>
+                            <option value="cripto">cripto</option>
+                        </select>
+                        <label for="invest-name">nome do ativo</label>
+                        <input id="invest-name" name="name" type="text" autocomplete="off" required>
+                        <div data-quantity-field>
+                            <label for="invest-quantity">quantidade <span class="label-note" data-quantity-note>(opcional)</span></label>
+                            <input id="invest-quantity" name="quantity" type="number" min="0" step="0.01">
+                        </div>
+                        <label for="invest-value">valor</label>
+                        <input id="invest-value" name="value" type="number" min="0" step="0.01">
+                    </div>
+                    <div class="modal-actions">
+                        <button class="secondary-button" type="submit" data-action="confirm-invest">adicionar</button>
+                    </div>
+                    <p class="form-message" data-message="investment"></p>
+                </form>
+            </div>
+
+            <section class="cards">
+                <article class="card">
+                    <p class="card-label">patrimonio</p>
+                    <h2>R$ 0,00</h2>
+                    <p class="card-detail">posicao total</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">ativos</p>
+                    <h2>0</h2>
+                    <p class="card-detail">carteira zerada</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">rendimentos</p>
+                    <h2>R$ 0,00</h2>
+                    <p class="card-detail">ultimo mes</p>
+                </article>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>posicoes</h3>
+                    <span class="panel-tag">agora</span>
+                </div>
+                <div class="panel-grid">
+                    <div class="panel-item">
+                        <p class="panel-title">acoes</p>
+                        <p class="panel-detail">sem ativos</p>
+                    </div>
+                    <div class="panel-item">
+                        <p class="panel-title">fundos</p>
+                        <p class="panel-detail">sem ativos</p>
+                    </div>
+                    <div class="panel-item">
+                        <p class="panel-title">caixa</p>
+                        <p class="panel-detail">R$ 0,00</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>investimentos</h3>
+                    <span class="panel-tag">crud</span>
+                </div>
+                <div class="crud-list" data-list="investments"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>transacoes</h3>
+                    <span class="panel-tag">crud</span>
+                </div>
+                <form class="crud-form" data-form="transaction">
+                    <div class="crud-fields">
+                        <div>
+                            <label for="transaction-type">tipo</label>
+                            <select id="transaction-type" name="type" required>
+                                <option value="compra">compra</option>
+                                <option value="venda">venda</option>
+                                <option value="dividendo">dividendo</option>
+                                <option value="deposito">deposito</option>
+                                <option value="saque">saque</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="transaction-description">descricao</label>
+                            <input id="transaction-description" name="description" type="text" autocomplete="off" required>
+                        </div>
+                        <div>
+                            <label for="transaction-amount">valor</label>
+                            <input id="transaction-amount" name="amount" type="number" min="0" step="0.01" required>
+                        </div>
+                        <div>
+                            <label for="transaction-date">data</label>
+                            <input id="transaction-date" name="date" type="date">
+                        </div>
+                    </div>
+                    <div class="crud-actions">
+                        <button class="secondary-button" type="submit" data-action="submit-transaction">adicionar</button>
+                        <button class="ghost-button" type="button" data-action="cancel-transaction" hidden>cancelar</button>
+                    </div>
+                    <p class="form-message" data-message="transaction"></p>
+                </form>
+                <div class="crud-list" data-list="transactions"></div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js" defer></script>
+</body>
+</html>

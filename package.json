@@ -1,0 +1,9 @@
+{
+    "name": "investidor-login",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Servidor simples para login e dashboard do investidor",
+    "scripts": {
+        "start": "node server.js"
+    }
+}
