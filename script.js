@@ -116,7 +116,7 @@ const handleRegister = (form) => {
             form.reset();
 
             setTimeout(() => {
-                window.location.href = "login.html";
+                window.location.href = "dashboard.html";
             }, 1000);
         } catch {
             setMessage(message, "Nao foi possivel conectar ao servidor.", "error");

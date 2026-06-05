@@ -4,13 +4,25 @@ const path = require("path");
 const crypto = require("crypto");
 
 const PORT = process.env.PORT || 3000;
+const DATABASE_URL = process.env.DATABASE_URL || "";
 const ROOT_DIR = __dirname;
 const DATA_DIR = path.join(ROOT_DIR, "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const INVESTMENTS_FILE = path.join(DATA_DIR, "investments.json");
 const TRANSACTIONS_FILE = path.join(DATA_DIR, "transactions.json");
+const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
+const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 
 const sessions = new Map();
+let pool = null;
+
+if (DATABASE_URL) {
+    const { Pool } = require("pg");
+    pool = new Pool({
+        connectionString: DATABASE_URL,
+        ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
+    });
+}
 
 const MIME_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -70,6 +82,347 @@ const writeStore = (filePath, store) => {
     ensureDataDir();
     fs.writeFileSync(filePath, JSON.stringify(store, null, 2), "utf8");
 };
+
+const loadSessions = async () => {
+    if (pool) {
+        const result = await pool.query("SELECT token, email, created_at, expires_at FROM sessions WHERE expires_at > NOW()");
+        result.rows.forEach((row) => {
+            sessions.set(row.token, {
+                email: row.email,
+                createdAt: toCamelDate(row.created_at),
+                expiresAt: toCamelDate(row.expires_at),
+            });
+        });
+        await pool.query("DELETE FROM sessions WHERE expires_at <= NOW()");
+        return;
+    }
+
+    ensureDataDir();
+    if (!fs.existsSync(SESSIONS_FILE)) {
+        return;
+    }
+    try {
+        const raw = fs.readFileSync(SESSIONS_FILE, "utf8");
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return;
+        }
+        Object.entries(parsed).forEach(([token, session]) => {
+            if (!session?.email || !session?.expiresAt) {
+                return;
+            }
+            if (Date.parse(session.expiresAt) <= Date.now()) {
+                return;
+            }
+            sessions.set(token, session);
+        });
+    } catch {
+        sessions.clear();
+    }
+};
+
+const writeSessions = () => {
+    if (pool) {
+        return;
+    }
+    ensureDataDir();
+    const activeSessions = {};
+    sessions.forEach((session, token) => {
+        if (Date.parse(session.expiresAt) > Date.now()) {
+            activeSessions[token] = session;
+        }
+    });
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(activeSessions, null, 2), "utf8");
+};
+
+const toCamelDate = (value) => value instanceof Date ? value.toISOString() : value;
+
+const mapUser = (row) => row ? {
+    email: row.email,
+    salt: row.salt,
+    hash: row.hash,
+    createdAt: toCamelDate(row.created_at),
+} : null;
+
+const mapInvestment = (row) => row ? {
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    quantity: row.quantity === null ? null : Number(row.quantity),
+    value: row.value === null ? null : Number(row.value),
+    createdAt: toCamelDate(row.created_at),
+    updatedAt: toCamelDate(row.updated_at),
+} : null;
+
+const mapTransaction = (row) => row ? {
+    id: row.id,
+    type: row.type,
+    description: row.description,
+    amount: Number(row.amount),
+    date: toCamelDate(row.date),
+    createdAt: toCamelDate(row.created_at),
+    updatedAt: toCamelDate(row.updated_at),
+} : null;
+
+const initDatabase = async () => {
+    if (!pool) {
+        return;
+    }
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+            email TEXT PRIMARY KEY,
+            salt TEXT NOT NULL,
+            hash TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS investments (
+            id TEXT PRIMARY KEY,
+            user_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+            type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            quantity NUMERIC,
+            value NUMERIC,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ
+        );
+
+        CREATE TABLE IF NOT EXISTS transactions (
+            id TEXT PRIMARY KEY,
+            user_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+            type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            amount NUMERIC NOT NULL,
+            date TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ
+        );
+    `);
+};
+
+const fileStorage = {
+    findUser: async (email) => readUsers().find((user) => user.email === email) || null,
+    createUser: async (user) => {
+        const users = readUsers();
+        users.push(user);
+        writeUsers(users);
+    },
+    updateUserPassword: async (email, salt, hash) => {
+        const users = readUsers();
+        const index = users.findIndex((user) => user.email === email);
+        if (index === -1) {
+            return false;
+        }
+        users[index] = { ...users[index], salt, hash };
+        writeUsers(users);
+        return true;
+    },
+    deleteUser: async (email) => {
+        const users = readUsers();
+        const filtered = users.filter((user) => user.email !== email);
+        if (filtered.length === users.length) {
+            return false;
+        }
+        writeUsers(filtered);
+        removeUserItems(INVESTMENTS_FILE, email);
+        removeUserItems(TRANSACTIONS_FILE, email);
+        return true;
+    },
+    saveSession: async (token, session) => {
+        sessions.set(token, session);
+        writeSessions();
+    },
+    deleteSession: async (token) => {
+        sessions.delete(token);
+        writeSessions();
+    },
+    listInvestments: async (email) => sortByCreatedAtDesc(getUserItems(readStore(INVESTMENTS_FILE), email)),
+    getInvestment: async (email, id) => getUserItems(readStore(INVESTMENTS_FILE), email).find((item) => item.id === id) || null,
+    createInvestment: async (email, item) => {
+        const store = readStore(INVESTMENTS_FILE);
+        const items = getUserItems(store, email);
+        items.push(item);
+        store[email] = items;
+        writeStore(INVESTMENTS_FILE, store);
+        return item;
+    },
+    updateInvestment: async (email, id, updates) => {
+        const store = readStore(INVESTMENTS_FILE);
+        const items = getUserItems(store, email);
+        const index = items.findIndex((item) => item.id === id);
+        if (index === -1) {
+            return null;
+        }
+        const updated = { ...items[index], ...updates, updatedAt: new Date().toISOString() };
+        items[index] = updated;
+        store[email] = items;
+        writeStore(INVESTMENTS_FILE, store);
+        return updated;
+    },
+    deleteInvestment: async (email, id) => {
+        const store = readStore(INVESTMENTS_FILE);
+        const items = getUserItems(store, email);
+        const index = items.findIndex((item) => item.id === id);
+        if (index === -1) {
+            return false;
+        }
+        items.splice(index, 1);
+        store[email] = items;
+        writeStore(INVESTMENTS_FILE, store);
+        return true;
+    },
+    listTransactions: async (email) => sortByCreatedAtDesc(getUserItems(readStore(TRANSACTIONS_FILE), email)),
+    getTransaction: async (email, id) => getUserItems(readStore(TRANSACTIONS_FILE), email).find((item) => item.id === id) || null,
+    createTransaction: async (email, item) => {
+        const store = readStore(TRANSACTIONS_FILE);
+        const items = getUserItems(store, email);
+        items.push(item);
+        store[email] = items;
+        writeStore(TRANSACTIONS_FILE, store);
+        return item;
+    },
+    updateTransaction: async (email, id, updates) => {
+        const store = readStore(TRANSACTIONS_FILE);
+        const items = getUserItems(store, email);
+        const index = items.findIndex((item) => item.id === id);
+        if (index === -1) {
+            return null;
+        }
+        const updated = { ...items[index], ...updates, updatedAt: new Date().toISOString() };
+        items[index] = updated;
+        store[email] = items;
+        writeStore(TRANSACTIONS_FILE, store);
+        return updated;
+    },
+    deleteTransaction: async (email, id) => {
+        const store = readStore(TRANSACTIONS_FILE);
+        const items = getUserItems(store, email);
+        const index = items.findIndex((item) => item.id === id);
+        if (index === -1) {
+            return false;
+        }
+        items.splice(index, 1);
+        store[email] = items;
+        writeStore(TRANSACTIONS_FILE, store);
+        return true;
+    },
+};
+
+const databaseStorage = {
+    findUser: async (email) => {
+        const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+        return mapUser(result.rows[0]);
+    },
+    createUser: async (user) => {
+        await pool.query(
+            "INSERT INTO users (email, salt, hash, created_at) VALUES ($1, $2, $3, $4)",
+            [user.email, user.salt, user.hash, user.createdAt]
+        );
+    },
+    updateUserPassword: async (email, salt, hash) => {
+        const result = await pool.query("UPDATE users SET salt = $2, hash = $3 WHERE email = $1", [email, salt, hash]);
+        return result.rowCount > 0;
+    },
+    deleteUser: async (email) => {
+        const result = await pool.query("DELETE FROM users WHERE email = $1", [email]);
+        return result.rowCount > 0;
+    },
+    saveSession: async (token, session) => {
+        sessions.set(token, session);
+        await pool.query(
+            `INSERT INTO sessions (token, email, created_at, expires_at)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (token) DO UPDATE SET email = EXCLUDED.email, expires_at = EXCLUDED.expires_at`,
+            [token, session.email, session.createdAt, session.expiresAt]
+        );
+    },
+    deleteSession: async (token) => {
+        sessions.delete(token);
+        await pool.query("DELETE FROM sessions WHERE token = $1", [token]);
+    },
+    listInvestments: async (email) => {
+        const result = await pool.query("SELECT * FROM investments WHERE user_email = $1 ORDER BY created_at DESC", [email]);
+        return result.rows.map(mapInvestment);
+    },
+    getInvestment: async (email, id) => {
+        const result = await pool.query("SELECT * FROM investments WHERE user_email = $1 AND id = $2", [email, id]);
+        return mapInvestment(result.rows[0]);
+    },
+    createInvestment: async (email, item) => {
+        const result = await pool.query(
+            `INSERT INTO investments (id, user_email, type, name, quantity, value, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING *`,
+            [item.id, email, item.type, item.name, item.quantity, item.value, item.createdAt]
+        );
+        return mapInvestment(result.rows[0]);
+    },
+    updateInvestment: async (email, id, updates) => {
+        const current = await databaseStorage.getInvestment(email, id);
+        if (!current) {
+            return null;
+        }
+        const next = { ...current, ...updates, updatedAt: new Date().toISOString() };
+        const result = await pool.query(
+            `UPDATE investments
+             SET type = $3, name = $4, quantity = $5, value = $6, updated_at = $7
+             WHERE user_email = $1 AND id = $2
+             RETURNING *`,
+            [email, id, next.type, next.name, next.quantity, next.value, next.updatedAt]
+        );
+        return mapInvestment(result.rows[0]);
+    },
+    deleteInvestment: async (email, id) => {
+        const result = await pool.query("DELETE FROM investments WHERE user_email = $1 AND id = $2", [email, id]);
+        return result.rowCount > 0;
+    },
+    listTransactions: async (email) => {
+        const result = await pool.query("SELECT * FROM transactions WHERE user_email = $1 ORDER BY created_at DESC", [email]);
+        return result.rows.map(mapTransaction);
+    },
+    getTransaction: async (email, id) => {
+        const result = await pool.query("SELECT * FROM transactions WHERE user_email = $1 AND id = $2", [email, id]);
+        return mapTransaction(result.rows[0]);
+    },
+    createTransaction: async (email, item) => {
+        const result = await pool.query(
+            `INSERT INTO transactions (id, user_email, type, description, amount, date, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING *`,
+            [item.id, email, item.type, item.description, item.amount, item.date, item.createdAt]
+        );
+        return mapTransaction(result.rows[0]);
+    },
+    updateTransaction: async (email, id, updates) => {
+        const current = await databaseStorage.getTransaction(email, id);
+        if (!current) {
+            return null;
+        }
+        const next = { ...current, ...updates, updatedAt: new Date().toISOString() };
+        const result = await pool.query(
+            `UPDATE transactions
+             SET type = $3, description = $4, amount = $5, date = $6, updated_at = $7
+             WHERE user_email = $1 AND id = $2
+             RETURNING *`,
+            [email, id, next.type, next.description, next.amount, next.date, next.updatedAt]
+        );
+        return mapTransaction(result.rows[0]);
+    },
+    deleteTransaction: async (email, id) => {
+        const result = await pool.query("DELETE FROM transactions WHERE user_email = $1 AND id = $2", [email, id]);
+        return result.rowCount > 0;
+    },
+};
+
+const storage = pool ? databaseStorage : fileStorage;
 
 const getUserItems = (store, email) => {
     const items = store[email];
@@ -144,18 +497,26 @@ const parseCookies = (req) => {
     }, {});
 };
 
-const getSessionEmail = (req) => {
+const getSessionEmail = async (req) => {
     const cookies = parseCookies(req);
     const token = cookies.session;
     if (!token) {
         return "";
     }
     const session = sessions.get(token);
-    return session ? session.email : "";
+    if (!session) {
+        return "";
+    }
+    if (Date.parse(session.expiresAt) <= Date.now()) {
+        sessions.delete(token);
+        await storage.deleteSession(token);
+        return "";
+    }
+    return session.email;
 };
 
-const requireAuth = (req, res) => {
-    const email = getSessionEmail(req);
+const requireAuth = async (req, res) => {
+    const email = await getSessionEmail(req);
     if (!email) {
         sendJson(res, 401, { message: "Nao autorizado." });
         return "";
@@ -163,17 +524,18 @@ const requireAuth = (req, res) => {
     return email;
 };
 
-const createSession = (res, email) => {
+const createSession = async (res, email) => {
     const token = crypto.randomBytes(24).toString("hex");
-    sessions.set(token, { email, createdAt: Date.now() });
-    res.setHeader("Set-Cookie", `session=${token}; HttpOnly; SameSite=Lax; Path=/`);
+    const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS).toISOString();
+    await storage.saveSession(token, { email, createdAt: new Date().toISOString(), expiresAt });
+    res.setHeader("Set-Cookie", `session=${token}; Max-Age=${Math.floor(SESSION_MAX_AGE_MS / 1000)}; HttpOnly; SameSite=Lax; Path=/`);
 };
 
-const clearSession = (req, res) => {
+const clearSession = async (req, res) => {
     const cookies = parseCookies(req);
     const token = cookies.session;
     if (token) {
-        sessions.delete(token);
+        await storage.deleteSession(token);
     }
     res.setHeader("Set-Cookie", "session=; Max-Age=0; Path=/; SameSite=Lax; HttpOnly");
 };
@@ -250,22 +612,21 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
-            const users = readUsers();
-            const exists = users.some((user) => user.email === normalizedEmail);
-            if (exists) {
+            const existingUser = await storage.findUser(normalizedEmail);
+            if (existingUser) {
                 sendJson(res, 409, { message: "Email ja cadastrado. Faca login." });
                 return;
             }
 
             const { salt, hash } = hashPassword(password);
-            users.push({
+            await storage.createUser({
                 email: normalizedEmail,
                 salt,
                 hash,
                 createdAt: new Date().toISOString(),
             });
-            writeUsers(users);
-            sendJson(res, 201, { message: "Conta criada com sucesso!" });
+            await createSession(res, normalizedEmail);
+            sendJson(res, 201, { email: normalizedEmail, message: "Conta criada com sucesso!" });
         } catch {
             sendJson(res, 400, { message: "Dados invalidos." });
         }
@@ -287,8 +648,7 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
-            const users = readUsers();
-            const user = users.find((item) => item.email === normalizedEmail);
+            const user = await storage.findUser(normalizedEmail);
             if (!user) {
                 sendJson(res, 401, { message: "Conta nao encontrada. Cadastre-se." });
                 return;
@@ -300,7 +660,7 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
-            createSession(res, normalizedEmail);
+            await createSession(res, normalizedEmail);
             sendJson(res, 200, { email: normalizedEmail });
         } catch {
             sendJson(res, 400, { message: "Dados invalidos." });
@@ -309,13 +669,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/logout" && req.method === "POST") {
-        clearSession(req, res);
+        await clearSession(req, res);
         sendJson(res, 200, { message: "Logout realizado." });
         return;
     }
 
     if (pathname === "/api/me" && req.method === "GET") {
-        const email = getSessionEmail(req);
+        const email = await getSessionEmail(req);
         if (!email) {
             sendJson(res, 401, { message: "Nao autorizado." });
             return;
@@ -325,12 +685,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/users/me" && req.method === "GET") {
-        const email = requireAuth(req, res);
+        const email = await requireAuth(req, res);
         if (!email) {
             return;
         }
-        const users = readUsers();
-        const user = users.find((item) => item.email === email);
+        const user = await storage.findUser(email);
         if (!user) {
             sendJson(res, 404, { message: "Usuario nao encontrado." });
             return;
@@ -340,7 +699,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/users/me" && req.method === "PUT") {
-        const email = requireAuth(req, res);
+        const email = await requireAuth(req, res);
         if (!email) {
             return;
         }
@@ -354,15 +713,12 @@ const server = http.createServer(async (req, res) => {
                 sendJson(res, 400, { message: "Senha precisa ter pelo menos 6 caracteres." });
                 return;
             }
-            const users = readUsers();
-            const index = users.findIndex((user) => user.email === email);
-            if (index === -1) {
+            const { salt, hash } = hashPassword(password);
+            const updated = await storage.updateUserPassword(email, salt, hash);
+            if (!updated) {
                 sendJson(res, 404, { message: "Usuario nao encontrado." });
                 return;
             }
-            const { salt, hash } = hashPassword(password);
-            users[index] = { ...users[index], salt, hash };
-            writeUsers(users);
             sendJson(res, 200, { message: "Senha atualizada." });
         } catch {
             sendJson(res, 400, { message: "Dados invalidos." });
@@ -371,36 +727,31 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/users/me" && req.method === "DELETE") {
-        const email = requireAuth(req, res);
+        const email = await requireAuth(req, res);
         if (!email) {
             return;
         }
-        const users = readUsers();
-        const filtered = users.filter((user) => user.email !== email);
-        if (filtered.length === users.length) {
+        const deleted = await storage.deleteUser(email);
+        if (!deleted) {
             sendJson(res, 404, { message: "Usuario nao encontrado." });
             return;
         }
-        writeUsers(filtered);
-        removeUserItems(INVESTMENTS_FILE, email);
-        removeUserItems(TRANSACTIONS_FILE, email);
-        clearSession(req, res);
+        await clearSession(req, res);
         sendJson(res, 200, { message: "Conta removida." });
         return;
     }
 
     const investmentMatch = pathname.match(/^\/api\/investments(?:\/([^/]+))?\/?$/);
     if (investmentMatch) {
-        const email = requireAuth(req, res);
+        const email = await requireAuth(req, res);
         if (!email) {
             return;
         }
         const id = investmentMatch[1];
 
         if (!id && req.method === "GET") {
-            const store = readStore(INVESTMENTS_FILE);
-            const items = getUserItems(store, email);
-            sendJson(res, 200, { items: sortByCreatedAtDesc(items) });
+            const items = await storage.listInvestments(email);
+            sendJson(res, 200, { items });
             return;
         }
 
@@ -443,8 +794,6 @@ const server = http.createServer(async (req, res) => {
                     }
                 }
 
-                const store = readStore(INVESTMENTS_FILE);
-                const items = getUserItems(store, email);
                 const item = {
                     id: createId(),
                     type,
@@ -453,10 +802,8 @@ const server = http.createServer(async (req, res) => {
                     value: parsedValue,
                     createdAt: new Date().toISOString(),
                 };
-                items.push(item);
-                store[email] = items;
-                writeStore(INVESTMENTS_FILE, store);
-                sendJson(res, 201, { item });
+                const created = await storage.createInvestment(email, item);
+                sendJson(res, 201, { item: created });
             } catch {
                 sendJson(res, 400, { message: "Dados invalidos." });
             }
@@ -468,16 +815,14 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        const store = readStore(INVESTMENTS_FILE);
-        const items = getUserItems(store, email);
-        const index = items.findIndex((item) => item.id === id);
-        if (index === -1) {
+        const item = await storage.getInvestment(email, id);
+        if (!item) {
             sendJson(res, 404, { message: "Investimento nao encontrado." });
             return;
         }
 
         if (req.method === "GET") {
-            sendJson(res, 200, { item: items[index] });
+            sendJson(res, 200, { item });
             return;
         }
 
@@ -525,14 +870,7 @@ const server = http.createServer(async (req, res) => {
                     return;
                 }
 
-                const updated = {
-                    ...items[index],
-                    ...updates,
-                    updatedAt: new Date().toISOString(),
-                };
-                items[index] = updated;
-                store[email] = items;
-                writeStore(INVESTMENTS_FILE, store);
+                const updated = await storage.updateInvestment(email, id, updates);
                 sendJson(res, 200, { item: updated });
             } catch {
                 sendJson(res, 400, { message: "Dados invalidos." });
@@ -541,9 +879,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (req.method === "DELETE") {
-            items.splice(index, 1);
-            store[email] = items;
-            writeStore(INVESTMENTS_FILE, store);
+            await storage.deleteInvestment(email, id);
             sendJson(res, 200, { message: "Investimento removido." });
             return;
         }
@@ -554,16 +890,15 @@ const server = http.createServer(async (req, res) => {
 
     const transactionMatch = pathname.match(/^\/api\/transactions(?:\/([^/]+))?\/?$/);
     if (transactionMatch) {
-        const email = requireAuth(req, res);
+        const email = await requireAuth(req, res);
         if (!email) {
             return;
         }
         const id = transactionMatch[1];
 
         if (!id && req.method === "GET") {
-            const store = readStore(TRANSACTIONS_FILE);
-            const items = getUserItems(store, email);
-            sendJson(res, 200, { items: sortByCreatedAtDesc(items) });
+            const items = await storage.listTransactions(email);
+            sendJson(res, 200, { items });
             return;
         }
 
@@ -589,8 +924,6 @@ const server = http.createServer(async (req, res) => {
                     return;
                 }
 
-                const store = readStore(TRANSACTIONS_FILE);
-                const items = getUserItems(store, email);
                 const item = {
                     id: createId(),
                     type,
@@ -599,10 +932,8 @@ const server = http.createServer(async (req, res) => {
                     date: parsedDate,
                     createdAt: new Date().toISOString(),
                 };
-                items.push(item);
-                store[email] = items;
-                writeStore(TRANSACTIONS_FILE, store);
-                sendJson(res, 201, { item });
+                const created = await storage.createTransaction(email, item);
+                sendJson(res, 201, { item: created });
             } catch {
                 sendJson(res, 400, { message: "Dados invalidos." });
             }
@@ -614,16 +945,14 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        const store = readStore(TRANSACTIONS_FILE);
-        const items = getUserItems(store, email);
-        const index = items.findIndex((item) => item.id === id);
-        if (index === -1) {
+        const item = await storage.getTransaction(email, id);
+        if (!item) {
             sendJson(res, 404, { message: "Transacao nao encontrada." });
             return;
         }
 
         if (req.method === "GET") {
-            sendJson(res, 200, { item: items[index] });
+            sendJson(res, 200, { item });
             return;
         }
 
@@ -671,14 +1000,7 @@ const server = http.createServer(async (req, res) => {
                     return;
                 }
 
-                const updated = {
-                    ...items[index],
-                    ...updates,
-                    updatedAt: new Date().toISOString(),
-                };
-                items[index] = updated;
-                store[email] = items;
-                writeStore(TRANSACTIONS_FILE, store);
+                const updated = await storage.updateTransaction(email, id, updates);
                 sendJson(res, 200, { item: updated });
             } catch {
                 sendJson(res, 400, { message: "Dados invalidos." });
@@ -687,9 +1009,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (req.method === "DELETE") {
-            items.splice(index, 1);
-            store[email] = items;
-            writeStore(TRANSACTIONS_FILE, store);
+            await storage.deleteTransaction(email, id);
             sendJson(res, 200, { message: "Transacao removida." });
             return;
         }
@@ -704,7 +1024,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/") {
-        const email = getSessionEmail(req);
+        const email = await getSessionEmail(req);
         redirect(res, email ? "/dashboard.html" : "/login.html");
         return;
     }
@@ -714,12 +1034,24 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    if (isProtectedPath(pathname) && !getSessionEmail(req)) {
+    if (pathname === "/login") {
         redirect(res, "/login.html");
         return;
     }
 
-    if (isAuthPath(pathname) && getSessionEmail(req)) {
+    if (pathname === "/register") {
+        redirect(res, "/register.html");
+        return;
+    }
+
+    const currentEmail = await getSessionEmail(req);
+
+    if (isProtectedPath(pathname) && !currentEmail) {
+        redirect(res, "/login.html");
+        return;
+    }
+
+    if (isAuthPath(pathname) && currentEmail) {
         redirect(res, "/dashboard.html");
         return;
     }
@@ -758,6 +1090,15 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
-server.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
+const startServer = async () => {
+    await initDatabase();
+    await loadSessions();
+    server.listen(PORT, () => {
+        console.log(`Servidor rodando em http://localhost:${PORT}`);
+    });
+};
+
+startServer().catch((error) => {
+    console.error("Nao foi possivel iniciar o servidor.", error);
+    process.exit(1);
 });
