@@ -223,7 +223,7 @@ const serveFile = (res, filePath) => {
     res.end(file);
 };
 
-const isProtectedPath = (pathname) => ["/dashboard.html", "/carteira.html"].includes(pathname);
+const isProtectedPath = (pathname) => ["/dashboard.html", "/carteira.html", "/transacoes.html"].includes(pathname);
 const isAuthPath = (pathname) => ["/login.html", "/register.html"].includes(pathname);
 
 const server = http.createServer(async (req, res) => {
@@ -706,6 +706,11 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/") {
         const email = getSessionEmail(req);
         redirect(res, email ? "/dashboard.html" : "/login.html");
+        return;
+    }
+
+    if (pathname === "/transacoes") {
+        redirect(res, "/transacoes.html");
         return;
     }
 

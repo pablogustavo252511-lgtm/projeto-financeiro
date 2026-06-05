@@ -134,6 +134,12 @@ if (registerForm) {
     handleRegister(registerForm);
 }
 
+document.querySelectorAll(".sidebar-nav .tab").forEach((link) => {
+    if (link.textContent.trim().toLowerCase() === "transacoes") {
+        link.setAttribute("href", "/transacoes.html");
+    }
+});
+
 const protectedPage = document.querySelector("[data-page]");
 if (protectedPage) {
     (async () => {
@@ -175,6 +181,13 @@ const formatDate = (value) => {
         return "data invalida";
     }
     return parsed.toLocaleDateString("pt-BR");
+};
+
+const getTransactionDirection = (type) => {
+    if (["venda", "dividendo", "deposito"].includes(type)) {
+        return "income";
+    }
+    return "expense";
 };
 
 const initPortfolioCrud = () => {
@@ -636,3 +649,260 @@ const initPortfolioCrud = () => {
 };
 
 initPortfolioCrud();
+
+const initTransactionsPage = () => {
+    const page = document.querySelector('[data-page="transacoes"]');
+    if (!page) {
+        return;
+    }
+
+    const transactionList = document.querySelector('[data-list="transactions"]');
+    const transactionForm = document.querySelector('[data-form="transaction"]');
+    const filterForm = document.querySelector('[data-form="transaction-filters"]');
+    const incomeSummary = document.querySelector('[data-summary="income"]');
+    const expenseSummary = document.querySelector('[data-summary="expense"]');
+    const balanceSummary = document.querySelector('[data-summary="balance"]');
+
+    if (!transactionList || !transactionForm || !filterForm) {
+        return;
+    }
+
+    const transactionMessage = transactionForm.querySelector('[data-message="transaction"]');
+    const transactionType = transactionForm.querySelector("#transaction-type");
+    const transactionDescription = transactionForm.querySelector("#transaction-description");
+    const transactionAmount = transactionForm.querySelector("#transaction-amount");
+    const transactionDate = transactionForm.querySelector("#transaction-date");
+    const transactionCancel = transactionForm.querySelector('[data-action="cancel-transaction"]');
+    const transactionSubmit = transactionForm.querySelector('[data-action="submit-transaction"]');
+    const filterType = filterForm.querySelector("#filter-type");
+    const filterDate = filterForm.querySelector("#filter-date");
+    const clearFiltersButton = filterForm.querySelector('[data-action="clear-transaction-filters"]');
+
+    if (
+        !transactionType
+        || !transactionDescription
+        || !transactionAmount
+        || !transactionDate
+        || !transactionCancel
+        || !transactionSubmit
+        || !filterType
+        || !filterDate
+        || !clearFiltersButton
+    ) {
+        return;
+    }
+
+    let transactions = [];
+
+    const renderEmpty = (message) => {
+        transactionList.innerHTML = "";
+        const empty = document.createElement("div");
+        empty.className = "crud-empty";
+        empty.textContent = message;
+        transactionList.appendChild(empty);
+    };
+
+    const getFilteredTransactions = () => {
+        const typeValue = filterType.value;
+        const dateValue = filterDate.value;
+
+        return transactions.filter((item) => {
+            const matchesType = !typeValue || item.type === typeValue;
+            const itemDate = item.date ? item.date.slice(0, 10) : "";
+            const matchesDate = !dateValue || itemDate === dateValue;
+            return matchesType && matchesDate;
+        });
+    };
+
+    const renderSummary = (items) => {
+        const totals = items.reduce((accumulator, item) => {
+            const amount = Number(item.amount) || 0;
+            if (getTransactionDirection(item.type) === "income") {
+                accumulator.income += amount;
+            } else {
+                accumulator.expense += amount;
+            }
+            return accumulator;
+        }, { income: 0, expense: 0 });
+
+        if (incomeSummary) {
+            incomeSummary.textContent = formatCurrency(totals.income);
+        }
+        if (expenseSummary) {
+            expenseSummary.textContent = formatCurrency(totals.expense);
+        }
+        if (balanceSummary) {
+            balanceSummary.textContent = formatCurrency(totals.income - totals.expense);
+        }
+    };
+
+    const renderTransactions = () => {
+        const items = getFilteredTransactions();
+        renderSummary(items);
+
+        if (!items.length) {
+            renderEmpty("Nenhuma transacao encontrada.");
+            return;
+        }
+
+        transactionList.innerHTML = "";
+        const fragment = document.createDocumentFragment();
+
+        items.forEach((item) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "crud-item";
+            wrapper.dataset.id = item.id;
+
+            const info = document.createElement("div");
+            const title = document.createElement("p");
+            title.className = "crud-title";
+            title.textContent = item.description;
+            const meta = document.createElement("p");
+            meta.className = "crud-meta";
+            meta.textContent = `${item.type} | ${formatCurrency(item.amount)} | ${formatDate(item.date)}`;
+            info.append(title, meta);
+
+            const actions = document.createElement("div");
+            actions.className = "crud-actions";
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.className = "crud-button";
+            editButton.dataset.action = "edit-transaction";
+            editButton.textContent = "editar";
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "crud-button danger";
+            deleteButton.dataset.action = "delete-transaction";
+            deleteButton.textContent = "excluir";
+            actions.append(editButton, deleteButton);
+
+            wrapper.append(info, actions);
+            fragment.appendChild(wrapper);
+        });
+
+        transactionList.appendChild(fragment);
+    };
+
+    const loadTransactions = async () => {
+        const result = await getJson("/api/transactions");
+        if (!result.ok) {
+            setMessage(transactionMessage, result.data?.message || "Nao foi possivel carregar transacoes.", "error");
+            renderSummary([]);
+            renderEmpty("Nao foi possivel carregar transacoes.");
+            return;
+        }
+
+        transactions = Array.isArray(result.data?.items) ? result.data.items : [];
+        renderTransactions();
+    };
+
+    const resetTransactionForm = () => {
+        transactionForm.reset();
+        transactionForm.dataset.mode = "create";
+        transactionForm.removeAttribute("data-id");
+        transactionSubmit.textContent = "adicionar";
+        transactionCancel.hidden = true;
+        setMessage(transactionMessage, "");
+    };
+
+    const fillTransactionForm = (item) => {
+        transactionForm.dataset.mode = "edit";
+        transactionForm.dataset.id = item.id;
+        transactionType.value = item.type;
+        transactionDescription.value = item.description;
+        transactionAmount.value = item.amount;
+        transactionDate.value = item.date ? item.date.slice(0, 10) : "";
+        transactionSubmit.textContent = "salvar";
+        transactionCancel.hidden = false;
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    transactionForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const description = transactionDescription.value.trim();
+        const amount = Number(transactionAmount.value);
+        const dateValue = transactionDate.value;
+
+        if (!description) {
+            setMessage(transactionMessage, "Informe a descricao.", "error");
+            return;
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            setMessage(transactionMessage, "Valor invalido.", "error");
+            return;
+        }
+
+        const payload = {
+            type: transactionType.value,
+            description,
+            amount,
+        };
+        if (dateValue) {
+            payload.date = dateValue;
+        }
+
+        const mode = transactionForm.dataset.mode || "create";
+        const endpoint = mode === "edit" ? `/api/transactions/${transactionForm.dataset.id}` : "/api/transactions";
+        const method = mode === "edit" ? "PUT" : "POST";
+
+        const result = await requestJson(endpoint, { method, payload });
+        if (!result.ok) {
+            setMessage(transactionMessage, result.data?.message || "Nao foi possivel salvar transacao.", "error");
+            return;
+        }
+
+        resetTransactionForm();
+        await loadTransactions();
+    });
+
+    transactionCancel.addEventListener("click", () => {
+        resetTransactionForm();
+    });
+
+    transactionList.addEventListener("click", async (event) => {
+        const button = event.target.closest("button");
+        if (!button || !button.dataset.action) {
+            return;
+        }
+        const itemElement = event.target.closest(".crud-item");
+        const id = itemElement?.dataset.id;
+        if (!id) {
+            return;
+        }
+        const item = transactions.find((entry) => entry.id === id);
+        if (!item) {
+            return;
+        }
+
+        if (button.dataset.action === "edit-transaction") {
+            fillTransactionForm(item);
+            return;
+        }
+
+        if (button.dataset.action === "delete-transaction") {
+            const confirmed = window.confirm("Remover transacao?");
+            if (!confirmed) {
+                return;
+            }
+            const result = await requestJson(`/api/transactions/${id}`, { method: "DELETE" });
+            if (!result.ok) {
+                setMessage(transactionMessage, result.data?.message || "Nao foi possivel remover transacao.", "error");
+                return;
+            }
+            await loadTransactions();
+        }
+    });
+
+    filterType.addEventListener("change", renderTransactions);
+    filterDate.addEventListener("change", renderTransactions);
+    clearFiltersButton.addEventListener("click", () => {
+        filterForm.reset();
+        renderTransactions();
+    });
+
+    resetTransactionForm();
+    loadTransactions();
+};
+
+initTransactionsPage();
