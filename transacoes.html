@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>transacoes investidor</title>
+</head>
+<body class="dashboard-body" data-page="transacoes">
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-mark">INV</span>
+                <div class="brand-text">
+                    <span class="brand-title">investidor</span>
+                    <span class="brand-subtitle">painel</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="tab" href="dashboard.html">visao geral</a>
+                <a class="tab" href="carteira.html">carteira</a>
+                <a class="tab active" href="transacoes.html">transacoes</a>
+                <a class="tab" href="#">relatorios</a>
+                <a class="tab" href="#">conta</a>
+                <a class="tab" href="#">configuracoes</a>
+            </nav>
+            <button class="logout-button" type="button" data-action="logout">sair</button>
+        </aside>
+
+        <main class="dashboard-content">
+            <header class="content-header">
+                <div>
+                    <p class="eyebrow">conta ativa</p>
+                    <h1>transacoes</h1>
+                    <p class="subtle">Bem vindo, <span data-user-email></span></p>
+                </div>
+                <div class="status-pill">online</div>
+            </header>
+
+            <section class="cards">
+                <article class="card">
+                    <p class="card-label">total de entradas</p>
+                    <h2 data-summary="income">R$ 0,00</h2>
+                    <p class="card-detail">depositos, vendas e dividendos</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">total de saidas</p>
+                    <h2 data-summary="expense">R$ 0,00</h2>
+                    <p class="card-detail">compras e saques</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">saldo atual</p>
+                    <h2 data-summary="balance">R$ 0,00</h2>
+                    <p class="card-detail">entradas menos saidas</p>
+                </article>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>filtros</h3>
+                    <span class="panel-tag">tipo e data</span>
+                </div>
+                <form class="filter-form" data-form="transaction-filters">
+                    <div>
+                        <label for="filter-type">filtro por tipo</label>
+                        <select id="filter-type" name="type">
+                            <option value="">todos</option>
+                            <option value="compra">compra</option>
+                            <option value="venda">venda</option>
+                            <option value="dividendo">dividendo</option>
+                            <option value="deposito">deposito</option>
+                            <option value="saque">saque</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="filter-date">filtro por data</label>
+                        <input id="filter-date" name="date" type="date">
+                    </div>
+                    <button class="ghost-button" type="button" data-action="clear-transaction-filters">limpar filtros</button>
+                </form>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>nova transacao</h3>
+                    <span class="panel-tag">editar e excluir</span>
+                </div>
+                <form class="crud-form" data-form="transaction">
+                    <div class="crud-fields">
+                        <div>
+                            <label for="transaction-type">tipo</label>
+                            <select id="transaction-type" name="type" required>
+                                <option value="compra">compra</option>
+                                <option value="venda">venda</option>
+                                <option value="dividendo">dividendo</option>
+                                <option value="deposito">deposito</option>
+                                <option value="saque">saque</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="transaction-description">descricao</label>
+                            <input id="transaction-description" name="description" type="text" autocomplete="off" required>
+                        </div>
+                        <div>
+                            <label for="transaction-amount">valor</label>
+                            <input id="transaction-amount" name="amount" type="number" min="0" step="0.01" required>
+                        </div>
+                        <div>
+                            <label for="transaction-date">data</label>
+                            <input id="transaction-date" name="date" type="date">
+                        </div>
+                    </div>
+                    <div class="crud-actions">
+                        <button class="secondary-button" type="submit" data-action="submit-transaction">adicionar</button>
+                        <button class="ghost-button" type="button" data-action="cancel-transaction" hidden>cancelar</button>
+                    </div>
+                    <p class="form-message" data-message="transaction"></p>
+                </form>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>historico de transacoes</h3>
+                    <span class="panel-tag">crud</span>
+                </div>
+                <div class="crud-list" data-list="transactions"></div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js" defer></script>
+</body>
+</html>
