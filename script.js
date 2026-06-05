@@ -112,11 +112,11 @@ const handleRegister = (form) => {
                 return;
             }
 
-            setMessage(message, "Conta criada com sucesso!", "success");
+            setMessage(message, "Conta criada com sucesso! Faca login para entrar.", "success");
             form.reset();
 
             setTimeout(() => {
-                window.location.href = "dashboard.html";
+                window.location.href = "login.html";
             }, 1000);
         } catch {
             setMessage(message, "Nao foi possivel conectar ao servidor.", "error");

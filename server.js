@@ -625,8 +625,7 @@ const server = http.createServer(async (req, res) => {
                 hash,
                 createdAt: new Date().toISOString(),
             });
-            await createSession(res, normalizedEmail);
-            sendJson(res, 201, { email: normalizedEmail, message: "Conta criada com sucesso!" });
+            sendJson(res, 201, { email: normalizedEmail, message: "Conta criada com sucesso! Faca login para entrar." });
         } catch {
             sendJson(res, 400, { message: "Dados invalidos." });
         }
@@ -1024,8 +1023,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/") {
-        const email = await getSessionEmail(req);
-        redirect(res, email ? "/dashboard.html" : "/login.html");
+        redirect(res, "/login.html");
         return;
     }
 
@@ -1048,11 +1046,6 @@ const server = http.createServer(async (req, res) => {
 
     if (isProtectedPath(pathname) && !currentEmail) {
         redirect(res, "/login.html");
-        return;
-    }
-
-    if (isAuthPath(pathname) && currentEmail) {
-        redirect(res, "/dashboard.html");
         return;
     }
 
