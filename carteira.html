@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles.css">
-    <title>carteira investidor</title>
+    <title>carteira de investimento</title>
 </head>
 <body class="dashboard-body" data-page="carteira">
     <div class="dashboard">
@@ -31,7 +31,7 @@
             <header class="content-header">
                 <div>
                     <p class="eyebrow">conta ativa</p>
-                    <h1>carteira</h1>
+                    <h1>carteira de investimento</h1>
                     <p class="subtle">Bem vindo, <span data-user-email></span></p>
                 </div>
                 <div class="header-actions">
@@ -113,45 +113,6 @@
                     <span class="panel-tag">crud</span>
                 </div>
                 <div class="crud-list" data-list="investments"></div>
-            </section>
-
-            <section class="panel">
-                <div class="panel-header">
-                    <h3>transacoes</h3>
-                    <span class="panel-tag">crud</span>
-                </div>
-                <form class="crud-form" data-form="transaction">
-                    <div class="crud-fields">
-                        <div>
-                            <label for="transaction-type">tipo</label>
-                            <select id="transaction-type" name="type" required>
-                                <option value="compra">compra</option>
-                                <option value="venda">venda</option>
-                                <option value="dividendo">dividendo</option>
-                                <option value="deposito">deposito</option>
-                                <option value="saque">saque</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="transaction-description">descricao</label>
-                            <input id="transaction-description" name="description" type="text" autocomplete="off" required>
-                        </div>
-                        <div>
-                            <label for="transaction-amount">valor</label>
-                            <input id="transaction-amount" name="amount" type="number" min="0" step="0.01" required>
-                        </div>
-                        <div>
-                            <label for="transaction-date">data</label>
-                            <input id="transaction-date" name="date" type="date">
-                        </div>
-                    </div>
-                    <div class="crud-actions">
-                        <button class="secondary-button" type="submit" data-action="submit-transaction">adicionar</button>
-                        <button class="ghost-button" type="button" data-action="cancel-transaction" hidden>cancelar</button>
-                    </div>
-                    <p class="form-message" data-message="transaction"></p>
-                </form>
-                <div class="crud-list" data-list="transactions"></div>
             </section>
         </main>
     </div>

@@ -199,10 +199,8 @@ const initPortfolioCrud = () => {
     const investModal = document.querySelector('[data-modal="invest"]');
     const openInvestButton = document.querySelector('[data-action="open-invest"]');
     const investmentList = document.querySelector('[data-list="investments"]');
-    const transactionList = document.querySelector('[data-list="transactions"]');
-    const transactionForm = document.querySelector('[data-form="transaction"]');
 
-    if (!investModal || !openInvestButton || !investmentList || !transactionList || !transactionForm) {
+    if (!investModal || !openInvestButton || !investmentList) {
         return;
     }
 
@@ -216,14 +214,6 @@ const initPortfolioCrud = () => {
     const quantityNote = investForm?.querySelector('[data-quantity-note]');
     const investSubmit = investForm?.querySelector('[data-action="confirm-invest"]');
 
-    const transactionMessage = transactionForm.querySelector('[data-message="transaction"]');
-    const transactionType = transactionForm.querySelector("#transaction-type");
-    const transactionDescription = transactionForm.querySelector("#transaction-description");
-    const transactionAmount = transactionForm.querySelector("#transaction-amount");
-    const transactionDate = transactionForm.querySelector("#transaction-date");
-    const transactionCancel = transactionForm.querySelector('[data-action="cancel-transaction"]');
-    const transactionSubmit = transactionForm.querySelector('[data-action="submit-transaction"]');
-
     if (
         !investForm
         || !investType
@@ -231,18 +221,11 @@ const initPortfolioCrud = () => {
         || !investQuantity
         || !investValue
         || !investSubmit
-        || !transactionType
-        || !transactionDescription
-        || !transactionAmount
-        || !transactionDate
-        || !transactionCancel
-        || !transactionSubmit
     ) {
         return;
     }
 
     let investments = [];
-    let transactions = [];
 
     const renderEmpty = (container, message) => {
         container.innerHTML = "";
@@ -297,50 +280,6 @@ const initPortfolioCrud = () => {
         investmentList.appendChild(fragment);
     };
 
-    const renderTransactions = (items) => {
-        if (!items.length) {
-            renderEmpty(transactionList, "Nenhuma transacao cadastrada.");
-            return;
-        }
-
-        transactionList.innerHTML = "";
-        const fragment = document.createDocumentFragment();
-
-        items.forEach((item) => {
-            const wrapper = document.createElement("div");
-            wrapper.className = "crud-item";
-            wrapper.dataset.id = item.id;
-
-            const info = document.createElement("div");
-            const title = document.createElement("p");
-            title.className = "crud-title";
-            title.textContent = item.description;
-            const meta = document.createElement("p");
-            meta.className = "crud-meta";
-            meta.textContent = `${item.type} | ${formatCurrency(item.amount)} | ${formatDate(item.date)}`;
-            info.append(title, meta);
-
-            const actions = document.createElement("div");
-            actions.className = "crud-actions";
-            const editButton = document.createElement("button");
-            editButton.type = "button";
-            editButton.className = "crud-button";
-            editButton.dataset.action = "edit-transaction";
-            editButton.textContent = "editar";
-            const deleteButton = document.createElement("button");
-            deleteButton.type = "button";
-            deleteButton.className = "crud-button danger";
-            deleteButton.dataset.action = "delete-transaction";
-            deleteButton.textContent = "excluir";
-            actions.append(editButton, deleteButton);
-
-            wrapper.append(info, actions);
-            fragment.appendChild(wrapper);
-        });
-
-        transactionList.appendChild(fragment);
-    };
-
     const loadInvestments = async () => {
         const result = await getJson("/api/investments");
         if (!result.ok) {
@@ -351,18 +290,6 @@ const initPortfolioCrud = () => {
 
         investments = Array.isArray(result.data?.items) ? result.data.items : [];
         renderInvestments(investments);
-    };
-
-    const loadTransactions = async () => {
-        const result = await getJson("/api/transactions");
-        if (!result.ok) {
-            setMessage(transactionMessage, result.data?.message || "Nao foi possivel carregar transacoes.", "error");
-            renderEmpty(transactionList, "Nao foi possivel carregar transacoes.");
-            return;
-        }
-
-        transactions = Array.isArray(result.data?.items) ? result.data.items : [];
-        renderTransactions(transactions);
     };
 
     const resetInvestForm = () => {
@@ -396,26 +323,6 @@ const initPortfolioCrud = () => {
 
         investModal.classList.add("is-open");
         document.body.classList.add("modal-open");
-    };
-
-    const resetTransactionForm = () => {
-        transactionForm.reset();
-        transactionForm.dataset.mode = "create";
-        transactionForm.removeAttribute("data-id");
-        transactionSubmit.textContent = "adicionar";
-        transactionCancel.hidden = true;
-        setMessage(transactionMessage, "");
-    };
-
-    const fillTransactionForm = (item) => {
-        transactionForm.dataset.mode = "edit";
-        transactionForm.dataset.id = item.id;
-        transactionType.value = item.type;
-        transactionDescription.value = item.description;
-        transactionAmount.value = item.amount;
-        transactionDate.value = item.date ? item.date.slice(0, 10) : "";
-        transactionSubmit.textContent = "salvar";
-        transactionCancel.hidden = false;
     };
 
     const syncQuantityRequirement = () => {
@@ -565,87 +472,8 @@ const initPortfolioCrud = () => {
         }
     });
 
-    transactionForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-
-        const description = transactionDescription.value.trim();
-        const amount = Number(transactionAmount.value);
-        const dateValue = transactionDate.value;
-
-        if (!description) {
-            setMessage(transactionMessage, "Informe a descricao.", "error");
-            return;
-        }
-        if (!Number.isFinite(amount) || amount <= 0) {
-            setMessage(transactionMessage, "Valor invalido.", "error");
-            return;
-        }
-
-        const payload = {
-            type: transactionType.value,
-            description,
-            amount,
-        };
-        if (dateValue) {
-            payload.date = dateValue;
-        }
-
-        const mode = transactionForm.dataset.mode || "create";
-        const endpoint = mode === "edit" ? `/api/transactions/${transactionForm.dataset.id}` : "/api/transactions";
-        const method = mode === "edit" ? "PUT" : "POST";
-
-        const result = await requestJson(endpoint, { method, payload });
-        if (!result.ok) {
-            setMessage(transactionMessage, result.data?.message || "Nao foi possivel salvar transacao.", "error");
-            return;
-        }
-
-        resetTransactionForm();
-        await loadTransactions();
-    });
-
-    transactionCancel.addEventListener("click", () => {
-        resetTransactionForm();
-    });
-
-    transactionList.addEventListener("click", async (event) => {
-        const button = event.target.closest("button");
-        if (!button || !button.dataset.action) {
-            return;
-        }
-        const itemElement = event.target.closest(".crud-item");
-        const id = itemElement?.dataset.id;
-        if (!id) {
-            return;
-        }
-        const item = transactions.find((entry) => entry.id === id);
-        if (!item) {
-            return;
-        }
-
-        if (button.dataset.action === "edit-transaction") {
-            fillTransactionForm(item);
-            return;
-        }
-
-        if (button.dataset.action === "delete-transaction") {
-            const confirmed = window.confirm("Remover transacao?");
-            if (!confirmed) {
-                return;
-            }
-            const result = await requestJson(`/api/transactions/${id}`, { method: "DELETE" });
-            if (!result.ok) {
-                setMessage(transactionMessage, result.data?.message || "Nao foi possivel remover transacao.", "error");
-                return;
-            }
-            await loadTransactions();
-        }
-    });
-
     resetInvestForm();
-    resetTransactionForm();
     loadInvestments();
-    loadTransactions();
 };
 
 initPortfolioCrud();
