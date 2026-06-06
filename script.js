@@ -344,6 +344,7 @@ const initPortfolioCrud = () => {
     const investName = investForm?.querySelector("#invest-name");
     const investQuantity = investForm?.querySelector("#invest-quantity");
     const investValue = investForm?.querySelector("#invest-value");
+    const investValueLabel = investForm?.querySelector("[data-invest-value-label]");
     const investEarning = investForm?.querySelector("#invest-earning");
     const quantityField = investForm?.querySelector('[data-quantity-field]');
     const quantityNote = investForm?.querySelector('[data-quantity-note]');
@@ -355,6 +356,7 @@ const initPortfolioCrud = () => {
         || !investName
         || !investQuantity
         || !investValue
+        || !investValueLabel
         || !investEarning
         || !investSubmit
     ) {
@@ -482,6 +484,7 @@ const initPortfolioCrud = () => {
 
     const syncQuantityRequirement = () => {
         const requiresQuantity = investType?.value !== "renda-fixa";
+        investValueLabel.textContent = requiresQuantity ? "valor" : "valor de deposito";
         if (quantityNote) {
             quantityNote.hidden = !requiresQuantity;
         }
