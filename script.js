@@ -190,6 +190,133 @@ const getTransactionDirection = (type) => {
     return "expense";
 };
 
+const getInvestmentTotal = (item) => {
+    const value = Number(item.value) || 0;
+    const quantity = Number(item.quantity);
+    if (Number.isFinite(quantity) && quantity > 0) {
+        return quantity * value;
+    }
+    return value;
+};
+
+const summarizeInvestments = (items) => {
+    const summary = {
+        patrimony: 0,
+        assetsCount: items.length,
+        byType: {
+            acoes: { count: 0, total: 0 },
+            "renda-fixa": { count: 0, total: 0 },
+            cripto: { count: 0, total: 0 },
+        },
+    };
+
+    items.forEach((item) => {
+        const total = getInvestmentTotal(item);
+        summary.patrimony += total;
+        if (summary.byType[item.type]) {
+            summary.byType[item.type].count += 1;
+            summary.byType[item.type].total += total;
+        }
+    });
+
+    return summary;
+};
+
+const summarizeTransactions = (items) => items.reduce((summary, item) => {
+    const amount = Number(item.amount) || 0;
+    if (getTransactionDirection(item.type) === "income") {
+        summary.income += amount;
+    } else {
+        summary.expense += amount;
+    }
+    if (item.type === "dividendo") {
+        summary.earnings += amount;
+    }
+    return summary;
+}, { income: 0, expense: 0, earnings: 0 });
+
+const loadFinanceData = async () => {
+    const [investmentResult, transactionResult] = await Promise.all([
+        getJson("/api/investments"),
+        getJson("/api/transactions"),
+    ]);
+
+    return {
+        investments: investmentResult.ok && Array.isArray(investmentResult.data?.items) ? investmentResult.data.items : [],
+        transactions: transactionResult.ok && Array.isArray(transactionResult.data?.items) ? transactionResult.data.items : [],
+        investmentError: !investmentResult.ok ? investmentResult.data?.message : "",
+        transactionError: !transactionResult.ok ? transactionResult.data?.message : "",
+    };
+};
+
+const setText = (selector, value) => {
+    const element = document.querySelector(selector);
+    if (element) {
+        element.textContent = value;
+    }
+};
+
+const renderPosition = (type, position) => {
+    const countText = position.count === 1 ? "1 ativo" : `${position.count} ativos`;
+    return position.count ? `${countText} | ${formatCurrency(position.total)}` : "sem ativos";
+};
+
+const initDashboardSummary = () => {
+    const page = document.querySelector('[data-page="dashboard"]');
+    if (!page) {
+        return;
+    }
+
+    const recentMovements = document.querySelector('[data-dashboard="recent-movements"]');
+
+    const renderRecentMovements = (transactions) => {
+        if (!recentMovements) {
+            return;
+        }
+        recentMovements.innerHTML = "";
+
+        const recent = transactions.slice(0, 3);
+        if (!recent.length) {
+            const empty = document.createElement("div");
+            empty.className = "panel-item";
+            empty.innerHTML = '<p class="panel-title">sem movimentos</p><p class="panel-detail">adicione uma transacao</p>';
+            recentMovements.appendChild(empty);
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        recent.forEach((item) => {
+            const movement = document.createElement("div");
+            movement.className = "panel-item";
+            const title = document.createElement("p");
+            title.className = "panel-title";
+            title.textContent = item.type;
+            const detail = document.createElement("p");
+            detail.className = "panel-detail";
+            detail.textContent = `${formatCurrency(item.amount)} | ${formatDate(item.date)}`;
+            movement.append(title, detail);
+            fragment.appendChild(movement);
+        });
+        recentMovements.appendChild(fragment);
+    };
+
+    (async () => {
+        const { investments, transactions } = await loadFinanceData();
+        const investmentSummary = summarizeInvestments(investments);
+        const transactionSummary = summarizeTransactions(transactions);
+        const cashBalance = transactionSummary.income - transactionSummary.expense;
+
+        setText('[data-dashboard="total-balance"]', formatCurrency(investmentSummary.patrimony + cashBalance));
+        setText('[data-dashboard="assets-count"]', investmentSummary.assetsCount);
+        setText(
+            '[data-dashboard="assets-detail"]',
+            investmentSummary.assetsCount ? "investimentos cadastrados" : "carteira zerada"
+        );
+        setText('[data-dashboard="cash-balance"]', formatCurrency(cashBalance));
+        renderRecentMovements(transactions);
+    })();
+};
+
 const initPortfolioCrud = () => {
     const page = document.querySelector('[data-page="carteira"]');
     if (!page) {
@@ -227,6 +354,23 @@ const initPortfolioCrud = () => {
 
     let investments = [];
 
+    const renderPortfolioSummary = async () => {
+        const { transactions } = await loadFinanceData();
+        const investmentSummary = summarizeInvestments(investments);
+        const transactionSummary = summarizeTransactions(transactions);
+
+        setText('[data-portfolio="patrimony"]', formatCurrency(investmentSummary.patrimony));
+        setText('[data-portfolio="assets-count"]', investmentSummary.assetsCount);
+        setText(
+            '[data-portfolio="assets-detail"]',
+            investmentSummary.assetsCount ? "investimentos cadastrados" : "carteira zerada"
+        );
+        setText('[data-portfolio="earnings"]', formatCurrency(transactionSummary.earnings));
+        setText('[data-position="acoes"]', renderPosition("acoes", investmentSummary.byType.acoes));
+        setText('[data-position="renda-fixa"]', renderPosition("renda-fixa", investmentSummary.byType["renda-fixa"]));
+        setText('[data-position="cripto"]', renderPosition("cripto", investmentSummary.byType.cripto));
+    };
+
     const renderEmpty = (container, message) => {
         container.innerHTML = "";
         const empty = document.createElement("div");
@@ -255,8 +399,9 @@ const initPortfolioCrud = () => {
             title.textContent = item.name;
             const meta = document.createElement("p");
             meta.className = "crud-meta";
-            const total = Number(item.quantity) * Number(item.value);
-            meta.textContent = `${item.type} | ${item.quantity} x ${formatCurrency(item.value)} | total ${formatCurrency(total)}`;
+            const total = getInvestmentTotal(item);
+            const quantityText = item.quantity ? `${item.quantity} x ${formatCurrency(item.value)}` : formatCurrency(item.value);
+            meta.textContent = `${item.type} | ${quantityText} | total ${formatCurrency(total)}`;
             info.append(title, meta);
 
             const actions = document.createElement("div");
@@ -290,6 +435,7 @@ const initPortfolioCrud = () => {
 
         investments = Array.isArray(result.data?.items) ? result.data.items : [];
         renderInvestments(investments);
+        await renderPortfolioSummary();
     };
 
     const resetInvestForm = () => {
@@ -476,6 +622,7 @@ const initPortfolioCrud = () => {
     loadInvestments();
 };
 
+initDashboardSummary();
 initPortfolioCrud();
 
 const initTransactionsPage = () => {
@@ -543,15 +690,7 @@ const initTransactionsPage = () => {
     };
 
     const renderSummary = (items) => {
-        const totals = items.reduce((accumulator, item) => {
-            const amount = Number(item.amount) || 0;
-            if (getTransactionDirection(item.type) === "income") {
-                accumulator.income += amount;
-            } else {
-                accumulator.expense += amount;
-            }
-            return accumulator;
-        }, { income: 0, expense: 0 });
+        const totals = summarizeTransactions(items);
 
         if (incomeSummary) {
             incomeSummary.textContent = formatCurrency(totals.income);
@@ -566,7 +705,7 @@ const initTransactionsPage = () => {
 
     const renderTransactions = () => {
         const items = getFilteredTransactions();
-        renderSummary(items);
+        renderSummary(transactions);
 
         if (!items.length) {
             renderEmpty("Nenhuma transacao encontrada.");

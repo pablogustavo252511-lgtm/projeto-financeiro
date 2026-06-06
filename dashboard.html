@@ -40,18 +40,18 @@
             <section class="cards">
                 <article class="card">
                     <p class="card-label">saldo total</p>
-                    <h2>R$ 0,000,00</h2>
-                    <p class="card-detail">+0% esta semana</p>
+                    <h2 data-dashboard="total-balance">R$ 0,00</h2>
+                    <p class="card-detail">patrimonio + saldo atual</p>
                 </article>
                 <article class="card">
                     <p class="card-label">ativos</p>
-                    <h2>0 </h2>
-                    <p class="card-detail">diversificacao ok</p>
+                    <h2 data-dashboard="assets-count">0</h2>
+                    <p class="card-detail" data-dashboard="assets-detail">carteira zerada</p>
                 </article>
                 <article class="card">
-                    <p class="card-label">alertas</p>
-                    <h2>0</h2>
-                    <p class="card-detail">revisar metas</p>
+                    <p class="card-label">saldo atual</p>
+                    <h2 data-dashboard="cash-balance">R$ 0,00</h2>
+                    <p class="card-detail">entradas menos saidas</p>
                 </article>
             </section>
 
@@ -60,7 +60,7 @@
                     <h3>movimentos recentes</h3>
                     <span class="panel-tag">hoje</span>
                 </div>
-                <div class="panel-grid">
+                <div class="panel-grid" data-dashboard="recent-movements">
                     <div class="panel-item">
                         <p class="panel-title">compra</p>
                         <p class="panel-detail">R$ nenhuma açao</p>
