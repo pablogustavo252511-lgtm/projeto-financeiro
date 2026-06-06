@@ -176,6 +176,11 @@ const formatDate = (value) => {
     if (!value) {
         return "data indefinida";
     }
+    const dateOnly = String(value).slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+        const [year, month, day] = dateOnly.split("-");
+        return `${day}/${month}/${year}`;
+    }
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
         return "data invalida";
