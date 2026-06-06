@@ -208,6 +208,82 @@ const initDatabase = async () => {
     `);
 };
 
+const migrateJsonToDatabase = async () => {
+    if (!pool) {
+        return;
+    }
+
+    const users = readUsers();
+    for (const user of users) {
+        if (!user?.email || !user?.salt || !user?.hash) {
+            continue;
+        }
+        await pool.query(
+            `INSERT INTO users (email, salt, hash, created_at)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (email) DO NOTHING`,
+            [user.email, user.salt, user.hash, user.createdAt || new Date().toISOString()]
+        );
+    }
+
+    const userResult = await pool.query("SELECT email FROM users");
+    const knownUsers = new Set(userResult.rows.map((row) => row.email));
+
+    const investmentStore = readStore(INVESTMENTS_FILE);
+    for (const [email, items] of Object.entries(investmentStore)) {
+        if (!knownUsers.has(email) || !Array.isArray(items)) {
+            continue;
+        }
+        for (const item of items) {
+            if (!item?.id || !item?.type || !item?.name) {
+                continue;
+            }
+            await pool.query(
+                `INSERT INTO investments (id, user_email, type, name, quantity, value, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 ON CONFLICT (id) DO NOTHING`,
+                [
+                    item.id,
+                    email,
+                    item.type,
+                    item.name,
+                    item.quantity ?? null,
+                    item.value ?? null,
+                    item.createdAt || new Date().toISOString(),
+                    item.updatedAt || null,
+                ]
+            );
+        }
+    }
+
+    const transactionStore = readStore(TRANSACTIONS_FILE);
+    for (const [email, items] of Object.entries(transactionStore)) {
+        if (!knownUsers.has(email) || !Array.isArray(items)) {
+            continue;
+        }
+        for (const item of items) {
+            if (!item?.id || !item?.type || !item?.description || !item?.amount) {
+                continue;
+            }
+            await pool.query(
+                `INSERT INTO transactions (id, user_email, type, description, amount, date, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 ON CONFLICT (id) DO NOTHING`,
+                [
+                    item.id,
+                    email,
+                    item.type,
+                    item.description,
+                    item.amount,
+                    item.date || new Date().toISOString(),
+                    item.createdAt || new Date().toISOString(),
+                    item.updatedAt || null,
+                ]
+            );
+        }
+    }
+};
+
 const fileStorage = {
     findUser: async (email) => readUsers().find((user) => user.email === email) || null,
     createUser: async (user) => {
@@ -1085,9 +1161,11 @@ const server = http.createServer(async (req, res) => {
 
 const startServer = async () => {
     await initDatabase();
+    await migrateJsonToDatabase();
     await loadSessions();
     server.listen(PORT, () => {
         console.log(`Servidor rodando em http://localhost:${PORT}`);
+        console.log(`Armazenamento: ${pool ? "PostgreSQL" : "JSON local"}`);
     });
 };
 
