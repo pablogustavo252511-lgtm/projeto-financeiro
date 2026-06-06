@@ -759,6 +759,14 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    if (pathname === "/api/storage-status" && req.method === "GET") {
+        sendJson(res, 200, {
+            storage: pool ? "PostgreSQL" : "JSON local",
+            databaseConfigured: Boolean(DATABASE_URL),
+        });
+        return;
+    }
+
     if (pathname === "/api/users/me" && req.method === "GET") {
         const email = await requireAuth(req, res);
         if (!email) {
@@ -1165,7 +1173,7 @@ const startServer = async () => {
     await loadSessions();
     server.listen(PORT, () => {
         console.log(`Servidor rodando em http://localhost:${PORT}`);
-        console.log(`Armazenamento: ${pool ? "PostgreSQL" : "JSON local"}`);
+        console.log(`STORAGE=${pool ? "PostgreSQL" : "JSON local"}`);
     });
 };
 
