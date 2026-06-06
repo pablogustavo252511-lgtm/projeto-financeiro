@@ -208,6 +208,7 @@ const summarizeInvestments = (items) => {
     const summary = {
         patrimony: 0,
         assetsCount: items.length,
+        earnings: 0,
         byType: {
             acoes: { count: 0, total: 0 },
             "renda-fixa": { count: 0, total: 0 },
@@ -218,6 +219,7 @@ const summarizeInvestments = (items) => {
     items.forEach((item) => {
         const total = getInvestmentTotal(item);
         summary.patrimony += total;
+        summary.earnings += Number(item.earning) || 0;
         if (summary.byType[item.type]) {
             summary.byType[item.type].count += 1;
             summary.byType[item.type].total += total;
@@ -342,6 +344,7 @@ const initPortfolioCrud = () => {
     const investName = investForm?.querySelector("#invest-name");
     const investQuantity = investForm?.querySelector("#invest-quantity");
     const investValue = investForm?.querySelector("#invest-value");
+    const investEarning = investForm?.querySelector("#invest-earning");
     const quantityField = investForm?.querySelector('[data-quantity-field]');
     const quantityNote = investForm?.querySelector('[data-quantity-note]');
     const investSubmit = investForm?.querySelector('[data-action="confirm-invest"]');
@@ -352,6 +355,7 @@ const initPortfolioCrud = () => {
         || !investName
         || !investQuantity
         || !investValue
+        || !investEarning
         || !investSubmit
     ) {
         return;
@@ -360,9 +364,7 @@ const initPortfolioCrud = () => {
     let investments = [];
 
     const renderPortfolioSummary = async () => {
-        const { transactions } = await loadFinanceData();
         const investmentSummary = summarizeInvestments(investments);
-        const transactionSummary = summarizeTransactions(transactions);
 
         setText('[data-portfolio="patrimony"]', formatCurrency(investmentSummary.patrimony));
         setText('[data-portfolio="assets-count"]', investmentSummary.assetsCount);
@@ -370,7 +372,7 @@ const initPortfolioCrud = () => {
             '[data-portfolio="assets-detail"]',
             investmentSummary.assetsCount ? "investimentos cadastrados" : "carteira zerada"
         );
-        setText('[data-portfolio="earnings"]', formatCurrency(transactionSummary.earnings));
+        setText('[data-portfolio="earnings"]', formatCurrency(investmentSummary.earnings));
         setText('[data-position="acoes"]', renderPosition("acoes", investmentSummary.byType.acoes));
         setText('[data-position="renda-fixa"]', renderPosition("renda-fixa", investmentSummary.byType["renda-fixa"]));
         setText('[data-position="cripto"]', renderPosition("cripto", investmentSummary.byType.cripto));
@@ -406,7 +408,8 @@ const initPortfolioCrud = () => {
             meta.className = "crud-meta";
             const total = getInvestmentTotal(item);
             const quantityText = item.quantity ? `${item.quantity} x ${formatCurrency(item.value)}` : formatCurrency(item.value);
-            meta.textContent = `${item.type} | ${quantityText} | total ${formatCurrency(total)}`;
+            const earningText = item.earning ? ` | rendimento ${formatCurrency(item.earning)}` : "";
+            meta.textContent = `${item.type} | ${quantityText} | total ${formatCurrency(total)}${earningText}`;
             info.append(title, meta);
 
             const actions = document.createElement("div");
@@ -468,6 +471,7 @@ const initPortfolioCrud = () => {
             investName.value = item.name;
             investQuantity.value = item.quantity;
             investValue.value = item.value;
+            investEarning.value = item.earning || "";
             investSubmit.textContent = "salvar";
             syncQuantityRequirement();
         }
@@ -538,6 +542,8 @@ const initPortfolioCrud = () => {
         const quantity = rawQuantity === "" ? undefined : Number(rawQuantity);
         const rawValue = investValue.value.trim();
         const value = rawValue === "" ? undefined : Number(rawValue);
+        const rawEarning = investEarning.value.trim();
+        const earning = rawEarning === "" ? undefined : Number(rawEarning);
 
         if (!name) {
             setMessage(investMessage, "Informe o nome do ativo.", "error");
@@ -562,6 +568,10 @@ const initPortfolioCrud = () => {
             setMessage(investMessage, "Valor invalido.", "error");
             return;
         }
+        if (rawEarning !== "" && (!Number.isFinite(earning) || earning < 0)) {
+            setMessage(investMessage, "Rendimento invalido.", "error");
+            return;
+        }
 
         const payload = {
             type: investType.value,
@@ -573,6 +583,9 @@ const initPortfolioCrud = () => {
         }
         if (value !== undefined) {
             payload.value = value;
+        }
+        if (earning !== undefined || mode === "edit") {
+            payload.earning = earning;
         }
 
         const mode = investForm.dataset.mode || "create";

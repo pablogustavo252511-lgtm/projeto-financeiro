@@ -150,6 +150,7 @@ const mapInvestment = (row) => row ? {
     name: row.name,
     quantity: row.quantity === null ? null : Number(row.quantity),
     value: row.value === null ? null : Number(row.value),
+    earning: row.earning === null ? null : Number(row.earning),
     createdAt: toCamelDate(row.created_at),
     updatedAt: toCamelDate(row.updated_at),
 } : null;
@@ -191,6 +192,7 @@ const initDatabase = async () => {
             name TEXT NOT NULL,
             quantity NUMERIC,
             value NUMERIC,
+            earning NUMERIC,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ
         );
@@ -206,6 +208,8 @@ const initDatabase = async () => {
             updated_at TIMESTAMPTZ
         );
     `);
+
+    await pool.query("ALTER TABLE investments ADD COLUMN IF NOT EXISTS earning NUMERIC");
 };
 
 const migrateJsonToDatabase = async () => {
@@ -239,8 +243,8 @@ const migrateJsonToDatabase = async () => {
                 continue;
             }
             await pool.query(
-                `INSERT INTO investments (id, user_email, type, name, quantity, value, created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                `INSERT INTO investments (id, user_email, type, name, quantity, value, earning, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  ON CONFLICT (id) DO NOTHING`,
                 [
                     item.id,
@@ -249,6 +253,7 @@ const migrateJsonToDatabase = async () => {
                     item.name,
                     item.quantity ?? null,
                     item.value ?? null,
+                    item.earning ?? null,
                     item.createdAt || new Date().toISOString(),
                     item.updatedAt || null,
                 ]
@@ -434,10 +439,10 @@ const databaseStorage = {
     },
     createInvestment: async (email, item) => {
         const result = await pool.query(
-            `INSERT INTO investments (id, user_email, type, name, quantity, value, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO investments (id, user_email, type, name, quantity, value, earning, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
-            [item.id, email, item.type, item.name, item.quantity, item.value, item.createdAt]
+            [item.id, email, item.type, item.name, item.quantity, item.value, item.earning, item.createdAt]
         );
         return mapInvestment(result.rows[0]);
     },
@@ -449,10 +454,10 @@ const databaseStorage = {
         const next = { ...current, ...updates, updatedAt: new Date().toISOString() };
         const result = await pool.query(
             `UPDATE investments
-             SET type = $3, name = $4, quantity = $5, value = $6, updated_at = $7
+             SET type = $3, name = $4, quantity = $5, value = $6, earning = $7, updated_at = $8
              WHERE user_email = $1 AND id = $2
              RETURNING *`,
-            [email, id, next.type, next.name, next.quantity, next.value, next.updatedAt]
+            [email, id, next.type, next.name, next.quantity, next.value, next.earning, next.updatedAt]
         );
         return mapInvestment(result.rows[0]);
     },
@@ -843,7 +848,7 @@ const server = http.createServer(async (req, res) => {
 
         if (!id && req.method === "POST") {
             try {
-                const { type, name, quantity, value } = await parseJsonBody(req);
+                const { type, name, quantity, value, earning } = await parseJsonBody(req);
                 if (!INVESTMENT_TYPES.has(type)) {
                     sendJson(res, 400, { message: "Tipo de investimento invalido." });
                     return;
@@ -879,6 +884,14 @@ const server = http.createServer(async (req, res) => {
                         return;
                     }
                 }
+                let parsedEarning = null;
+                if (earning !== undefined) {
+                    parsedEarning = parseNumber(earning);
+                    if (parsedEarning === null || parsedEarning < 0) {
+                        sendJson(res, 400, { message: "Rendimento invalido." });
+                        return;
+                    }
+                }
 
                 const item = {
                     id: createId(),
@@ -886,6 +899,7 @@ const server = http.createServer(async (req, res) => {
                     name: name.trim(),
                     quantity: parsedQuantity,
                     value: parsedValue,
+                    earning: parsedEarning,
                     createdAt: new Date().toISOString(),
                 };
                 const created = await storage.createInvestment(email, item);
@@ -949,6 +963,19 @@ const server = http.createServer(async (req, res) => {
                         return;
                     }
                     updates.value = parsedValue;
+                }
+
+                if (payload.earning !== undefined) {
+                    if (payload.earning === null) {
+                        updates.earning = null;
+                    } else {
+                    const parsedEarning = parseNumber(payload.earning);
+                    if (parsedEarning === null || parsedEarning < 0) {
+                        sendJson(res, 400, { message: "Rendimento invalido." });
+                        return;
+                    }
+                    updates.earning = parsedEarning;
+                    }
                 }
 
                 if (!Object.keys(updates).length) {
