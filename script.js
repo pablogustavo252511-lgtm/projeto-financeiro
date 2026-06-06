@@ -306,7 +306,7 @@ const initDashboardSummary = () => {
         const transactionSummary = summarizeTransactions(transactions);
         const cashBalance = transactionSummary.income - transactionSummary.expense;
 
-        setText('[data-dashboard="total-balance"]', formatCurrency(investmentSummary.patrimony + cashBalance));
+        setText('[data-dashboard="total-balance"]', formatCurrency(investmentSummary.patrimony));
         setText('[data-dashboard="assets-count"]', investmentSummary.assetsCount);
         setText(
             '[data-dashboard="assets-detail"]',
