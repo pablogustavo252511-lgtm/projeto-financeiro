@@ -630,7 +630,7 @@ body.modal-open {
 }
 
 .report-cards {
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
 .report-filter-form,

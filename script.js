@@ -381,15 +381,20 @@ const initReportsPage = () => {
     const renderReportCards = (items) => {
         const invested = items.reduce((total, item) => total + getInvestmentTotal(item), 0);
         const current = items.reduce((total, item) => total + getInvestmentCurrentValue(item), 0);
-        const profit = current - invested;
-        const percent = invested > 0 ? (profit / invested) * 100 : 0;
+        const netProfit = current - invested;
+        const profit = Math.max(netProfit, 0);
+        const loss = Math.max(-netProfit, 0);
+        const profitPercent = invested > 0 ? (profit / invested) * 100 : 0;
+        const lossPercent = invested > 0 ? (loss / invested) * 100 : 0;
         const dividends = transactions
             .filter((item) => item.type === "dividendo" && isDateInRange(item.date, getReportFilters().start, getReportFilters().end))
             .reduce((total, item) => total + (Number(item.amount) || 0), 0);
 
         setText('[data-report="patrimony"]', formatCurrency(current));
         setText('[data-report="profit"]', formatCurrency(profit));
-        setText('[data-report="profit-percent"]', formatPercent(percent));
+        setText('[data-report="profit-percent"]', formatPercent(profitPercent));
+        setText('[data-report="loss"]', formatCurrency(loss));
+        setText('[data-report="loss-percent"]', loss > 0 ? `-${lossPercent.toFixed(2).replace(".", ",")}%` : "0%");
         setText('[data-report="invested"]', formatCurrency(invested));
         setText('[data-report="dividends"]', formatCurrency(dividends));
     };
