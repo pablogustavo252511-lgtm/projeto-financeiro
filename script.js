@@ -339,7 +339,7 @@ const initAccountPage = () => {
     const preferencesMessage = document.querySelector('[data-message="account-preferences"]');
     const actionsMessage = document.querySelector('[data-message="account-actions"]');
 
-    if (!profileForm || !passwordForm || !preferencesForm || !editButton || !saveButton || !cancelButton) {
+    if (!profileForm || !passwordForm || !editButton || !saveButton || !cancelButton) {
         return;
     }
 
@@ -351,10 +351,10 @@ const initAccountPage = () => {
     const profilePhone = profileForm.querySelector('[name="phone"]');
     const profileCpf = profileForm.querySelector('[name="cpf"]');
     const profileBirthDate = profileForm.querySelector('[name="birthDate"]');
-    const prefCurrency = preferencesForm.querySelector('[name="currency"]');
-    const prefTheme = preferencesForm.querySelector('[name="theme"]');
-    const prefEmailNotifications = preferencesForm.querySelector('[name="emailNotifications"]');
-    const prefShowFinancialValues = preferencesForm.querySelector('[name="showFinancialValues"]');
+    const prefCurrency = preferencesForm?.querySelector('[name="currency"]');
+    const prefTheme = preferencesForm?.querySelector('[name="theme"]');
+    const prefEmailNotifications = preferencesForm?.querySelector('[name="emailNotifications"]');
+    const prefShowFinancialValues = preferencesForm?.querySelector('[name="showFinancialValues"]');
     const currentPasswordInput = passwordForm.querySelector('[name="currentPassword"]');
     const newPasswordInput = passwordForm.querySelector('[name="newPassword"]');
     const confirmPasswordInput = passwordForm.querySelector('[name="confirmPassword"]');
@@ -377,10 +377,12 @@ const initAccountPage = () => {
         profileCpf.value = user.cpf || "";
         profileBirthDate.value = user.birthDate || "";
 
-        prefCurrency.value = user.currency || "BRL";
-        prefTheme.value = user.theme || "dark";
-        prefEmailNotifications.checked = user.emailNotifications !== false;
-        prefShowFinancialValues.checked = user.showFinancialValues !== false;
+        if (preferencesForm) {
+            prefCurrency.value = user.currency || "BRL";
+            prefTheme.value = user.theme || "dark";
+            prefEmailNotifications.checked = user.emailNotifications !== false;
+            prefShowFinancialValues.checked = user.showFinancialValues !== false;
+        }
 
         setText('[data-account="name"]', user.name || "sem nome");
         setText('[data-account="email"]', user.email || "-");
@@ -474,7 +476,7 @@ const initAccountPage = () => {
         setMessage(passwordMessage, "Senha atualizada.", "success");
     });
 
-    preferencesForm.addEventListener("submit", async (event) => {
+    preferencesForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const result = await requestJson("/api/account/preferences", {
             method: "PUT",
