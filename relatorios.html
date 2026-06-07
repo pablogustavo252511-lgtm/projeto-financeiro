@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>relatorios investidor</title>
+</head>
+<body class="dashboard-body" data-page="relatorios">
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-mark">INV</span>
+                <div class="brand-text">
+                    <span class="brand-title">investidor</span>
+                    <span class="brand-subtitle">painel</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="tab" href="dashboard.html">visao geral</a>
+                <a class="tab" href="carteira.html">carteira</a>
+                <a class="tab" href="/transacoes.html">transacoes</a>
+                <a class="tab active" href="/relatorios.html">relatorios</a>
+                <a class="tab" href="#">conta</a>
+                <a class="tab" href="#">configuracoes</a>
+            </nav>
+            <button class="logout-button" type="button" data-action="logout">sair</button>
+        </aside>
+
+        <main class="dashboard-content">
+            <header class="content-header">
+                <div>
+                    <p class="eyebrow">conta ativa</p>
+                    <h1>relatorios</h1>
+                    <p class="subtle">Bem vindo, <span data-user-email></span></p>
+                </div>
+                <div class="status-pill">online</div>
+            </header>
+
+            <section class="cards report-cards">
+                <article class="card">
+                    <p class="card-label">patrimonio total</p>
+                    <h2 data-report="patrimony">R$ 0,00</h2>
+                    <p class="card-detail">valor atual da carteira</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">lucro / prejuizo total</p>
+                    <h2 data-report="profit">R$ 0,00</h2>
+                    <p class="card-detail" data-report="profit-percent">0%</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">total investido</p>
+                    <h2 data-report="invested">R$ 0,00</h2>
+                    <p class="card-detail">soma de todos os aportes</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">dividendos recebidos</p>
+                    <h2 data-report="dividends">R$ 0,00</h2>
+                    <p class="card-detail">soma de todos os dividendos</p>
+                </article>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>filtros</h3>
+                    <span class="panel-tag">relatorio</span>
+                </div>
+                <form class="filter-form report-filter-form" data-form="report-filters">
+                    <div>
+                        <label for="report-start">periodo inicial</label>
+                        <input id="report-start" name="start" type="date">
+                    </div>
+                    <div>
+                        <label for="report-end">periodo final</label>
+                        <input id="report-end" name="end" type="date">
+                    </div>
+                    <div>
+                        <label for="report-asset-type">tipo de ativo</label>
+                        <select id="report-asset-type" name="assetType">
+                            <option value="">todos</option>
+                            <option value="acoes">acoes</option>
+                            <option value="fiis">fiis</option>
+                            <option value="etf">etf</option>
+                            <option value="renda-fixa">renda fixa</option>
+                            <option value="cripto">criptomoedas</option>
+                            <option value="outros">outros</option>
+                        </select>
+                    </div>
+                    <button class="secondary-button" type="submit">filtrar</button>
+                    <button class="ghost-button" type="button" data-action="clear-report-filters">limpar</button>
+                    <button class="ghost-button" type="button" data-action="export-report-pdf">exportar PDF</button>
+                </form>
+            </section>
+
+            <section class="report-grid">
+                <article class="panel report-chart-panel">
+                    <div class="panel-header">
+                        <h3>evolucao do patrimonio</h3>
+                        <span class="panel-tag">linha</span>
+                    </div>
+                    <div class="chart-metrics">
+                        <div>
+                            <p class="panel-title">crescimento mensal</p>
+                            <p class="panel-detail" data-report="monthly-growth">0%</p>
+                        </div>
+                        <div>
+                            <p class="panel-title">crescimento anual</p>
+                            <p class="panel-detail" data-report="yearly-growth">0%</p>
+                        </div>
+                    </div>
+                    <svg class="line-chart" viewBox="0 0 640 240" role="img" aria-label="evolucao do patrimonio">
+                        <defs>
+                            <linearGradient id="line-fill" x1="0" x2="0" y1="0" y2="1">
+                                <stop offset="0%" stop-color="rgba(111, 211, 255, 0.35)"/>
+                                <stop offset="100%" stop-color="rgba(111, 211, 255, 0)"/>
+                            </linearGradient>
+                        </defs>
+                        <path data-report="line-area" d="" fill="url(#line-fill)"></path>
+                        <polyline data-report="line-chart" points="" fill="none"></polyline>
+                    </svg>
+                </article>
+
+                <article class="panel report-chart-panel">
+                    <div class="panel-header">
+                        <h3>distribuicao da carteira</h3>
+                        <span class="panel-tag">pizza</span>
+                    </div>
+                    <div class="distribution-layout">
+                        <div class="pie-chart" data-report="pie-chart"></div>
+                        <div class="distribution-legend" data-report="distribution-legend"></div>
+                    </div>
+                </article>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>relatorio de rentabilidade</h3>
+                    <select class="report-sort" data-report="rentability-sort" aria-label="ordenar rentabilidade">
+                        <option value="rentability">ordenar por rentabilidade</option>
+                        <option value="profit">ordenar por lucro</option>
+                        <option value="invested">ordenar por valor investido</option>
+                    </select>
+                </div>
+                <div class="table-wrap">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>ativo</th>
+                                <th>investido</th>
+                                <th>atual</th>
+                                <th>lucro</th>
+                                <th>rentabilidade</th>
+                            </tr>
+                        </thead>
+                        <tbody data-report="rentability-table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>relatorio de movimentacoes</h3>
+                    <span class="panel-tag">historico</span>
+                </div>
+                <form class="filter-form movement-filter-form" data-form="movement-filters">
+                    <div>
+                        <label for="movement-type">tipo</label>
+                        <select id="movement-type" name="type">
+                            <option value="">todos</option>
+                            <option value="compra">compra</option>
+                            <option value="venda">venda</option>
+                            <option value="dividendo">dividendo</option>
+                            <option value="deposito">deposito</option>
+                            <option value="saque">saque</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="movement-date">data</label>
+                        <input id="movement-date" name="date" type="date">
+                    </div>
+                    <div>
+                        <label for="movement-min">valor minimo</label>
+                        <input id="movement-min" name="min" type="number" min="0" step="0.01">
+                    </div>
+                    <div>
+                        <label for="movement-max">valor maximo</label>
+                        <input id="movement-max" name="max" type="number" min="0" step="0.01">
+                    </div>
+                    <button class="secondary-button" type="submit">filtrar</button>
+                    <button class="ghost-button" type="button" data-action="clear-movement-filters">limpar</button>
+                </form>
+                <div class="table-wrap">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>tipo</th>
+                                <th>descricao</th>
+                                <th>valor</th>
+                                <th>data</th>
+                            </tr>
+                        </thead>
+                        <tbody data-report="movement-table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>analise da carteira</h3>
+                    <span class="panel-tag">inteligente</span>
+                </div>
+                <div class="insight-list" data-report="insights"></div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js" defer></script>
+</body>
+</html>

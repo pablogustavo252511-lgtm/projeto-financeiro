@@ -138,6 +138,9 @@ document.querySelectorAll(".sidebar-nav .tab").forEach((link) => {
     if (link.textContent.trim().toLowerCase() === "transacoes") {
         link.setAttribute("href", "/transacoes.html");
     }
+    if (link.textContent.trim().toLowerCase() === "relatorios") {
+        link.setAttribute("href", "/relatorios.html");
+    }
 });
 
 const protectedPage = document.querySelector("[data-page]");
@@ -267,6 +270,347 @@ const renderPosition = (type, position) => {
     const countText = position.count === 1 ? "1 ativo" : `${position.count} ativos`;
     return position.count ? `${countText} | ${formatCurrency(position.total)}` : "sem ativos";
 };
+
+const normalizeAssetType = (type) => {
+    const map = {
+        acoes: "acoes",
+        "renda-fixa": "renda fixa",
+        cripto: "criptomoedas",
+        fiis: "fiis",
+        etf: "etf",
+        outros: "outros",
+    };
+    return map[type] || type || "outros";
+};
+
+const getInvestmentCurrentValue = (item) => getInvestmentTotal(item) + (Number(item.earning) || 0);
+
+const formatPercent = (value) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        return "0%";
+    }
+    return `${number >= 0 ? "+" : ""}${number.toFixed(2).replace(".", ",")}%`;
+};
+
+const getDateOnly = (value) => String(value || "").slice(0, 10);
+
+const isDateInRange = (value, start, end) => {
+    const date = getDateOnly(value);
+    if (!date) {
+        return true;
+    }
+    if (start && date < start) {
+        return false;
+    }
+    if (end && date > end) {
+        return false;
+    }
+    return true;
+};
+
+const setTableEmpty = (tbody, colspan, message) => {
+    tbody.innerHTML = "";
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = colspan;
+    cell.textContent = message;
+    row.appendChild(cell);
+    tbody.appendChild(row);
+};
+
+const initReportsPage = () => {
+    const page = document.querySelector('[data-page="relatorios"]');
+    if (!page) {
+        return;
+    }
+
+    const reportFilterForm = document.querySelector('[data-form="report-filters"]');
+    const movementFilterForm = document.querySelector('[data-form="movement-filters"]');
+    const rentabilityTable = document.querySelector('[data-report="rentability-table"]');
+    const movementTable = document.querySelector('[data-report="movement-table"]');
+    const sortSelect = document.querySelector('[data-report="rentability-sort"]');
+    const pieChart = document.querySelector('[data-report="pie-chart"]');
+    const distributionLegend = document.querySelector('[data-report="distribution-legend"]');
+    const insights = document.querySelector('[data-report="insights"]');
+    const lineChart = document.querySelector('[data-report="line-chart"]');
+    const lineArea = document.querySelector('[data-report="line-area"]');
+
+    if (!reportFilterForm || !movementFilterForm || !rentabilityTable || !movementTable || !sortSelect) {
+        return;
+    }
+
+    let investments = [];
+    let transactions = [];
+    const colors = ["#6fd3ff", "#76ffc9", "#f7d774", "#ff9f7a", "#c4a5ff", "#f5f7ff"];
+
+    const getReportFilters = () => ({
+        start: reportFilterForm.querySelector("#report-start")?.value || "",
+        end: reportFilterForm.querySelector("#report-end")?.value || "",
+        assetType: reportFilterForm.querySelector("#report-asset-type")?.value || "",
+    });
+
+    const getMovementFilters = () => ({
+        type: movementFilterForm.querySelector("#movement-type")?.value || "",
+        date: movementFilterForm.querySelector("#movement-date")?.value || "",
+        min: movementFilterForm.querySelector("#movement-min")?.value || "",
+        max: movementFilterForm.querySelector("#movement-max")?.value || "",
+    });
+
+    const getFilteredInvestments = () => {
+        const filters = getReportFilters();
+        return investments.filter((item) => {
+            const matchesType = !filters.assetType || item.type === filters.assetType;
+            const matchesDate = isDateInRange(item.createdAt, filters.start, filters.end);
+            return matchesType && matchesDate;
+        });
+    };
+
+    const getFilteredMovements = () => {
+        const filters = getMovementFilters();
+        return transactions.filter((item) => {
+            const amount = Number(item.amount) || 0;
+            const matchesType = !filters.type || item.type === filters.type;
+            const matchesDate = !filters.date || getDateOnly(item.date) === filters.date;
+            const matchesMin = filters.min === "" || amount >= Number(filters.min);
+            const matchesMax = filters.max === "" || amount <= Number(filters.max);
+            return matchesType && matchesDate && matchesMin && matchesMax;
+        });
+    };
+
+    const renderReportCards = (items) => {
+        const invested = items.reduce((total, item) => total + getInvestmentTotal(item), 0);
+        const current = items.reduce((total, item) => total + getInvestmentCurrentValue(item), 0);
+        const profit = current - invested;
+        const percent = invested > 0 ? (profit / invested) * 100 : 0;
+        const dividends = transactions
+            .filter((item) => item.type === "dividendo" && isDateInRange(item.date, getReportFilters().start, getReportFilters().end))
+            .reduce((total, item) => total + (Number(item.amount) || 0), 0);
+
+        setText('[data-report="patrimony"]', formatCurrency(current));
+        setText('[data-report="profit"]', formatCurrency(profit));
+        setText('[data-report="profit-percent"]', formatPercent(percent));
+        setText('[data-report="invested"]', formatCurrency(invested));
+        setText('[data-report="dividends"]', formatCurrency(dividends));
+    };
+
+    const renderLineChart = (items) => {
+        const current = items.reduce((total, item) => total + getInvestmentCurrentValue(item), 0);
+        const values = Array.from({ length: 12 }, (_, index) => {
+            const factor = items.length ? 0.64 + (index * 0.036) : 0;
+            return Math.max(0, current * factor);
+        });
+        const max = Math.max(...values, 1);
+        const points = values.map((value, index) => {
+            const x = 24 + index * (592 / 11);
+            const y = 206 - ((value / max) * 160);
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+        });
+
+        if (lineChart) {
+            lineChart.setAttribute("points", points.join(" "));
+        }
+        if (lineArea) {
+            lineArea.setAttribute("d", `M24,206 L${points.join(" L")} L616,206 Z`);
+        }
+
+        const first = values[0] || 0;
+        const last = values[values.length - 1] || 0;
+        const monthly = values[values.length - 2] ? ((last - values[values.length - 2]) / values[values.length - 2]) * 100 : 0;
+        const yearly = first ? ((last - first) / first) * 100 : 0;
+        setText('[data-report="monthly-growth"]', formatPercent(monthly));
+        setText('[data-report="yearly-growth"]', formatPercent(yearly));
+    };
+
+    const renderDistribution = (items) => {
+        const totals = {};
+        items.forEach((item) => {
+            const label = normalizeAssetType(item.type);
+            totals[label] = (totals[label] || 0) + getInvestmentCurrentValue(item);
+        });
+
+        const entries = Object.entries(totals).filter(([, value]) => value > 0);
+        const total = entries.reduce((sum, [, value]) => sum + value, 0);
+
+        if (pieChart) {
+            if (!entries.length) {
+                pieChart.style.background = "conic-gradient(rgba(255,255,255,0.12) 0 100%)";
+            } else {
+                let cursor = 0;
+                const gradient = entries.map(([label, value], index) => {
+                    const start = cursor;
+                    const percent = (value / total) * 100;
+                    cursor += percent;
+                    return `${colors[index % colors.length]} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
+                }).join(", ");
+                pieChart.style.background = `conic-gradient(${gradient})`;
+            }
+        }
+
+        if (distributionLegend) {
+            distributionLegend.innerHTML = "";
+            if (!entries.length) {
+                const item = document.createElement("div");
+                item.className = "legend-item";
+                item.textContent = "sem ativos cadastrados";
+                distributionLegend.appendChild(item);
+                return;
+            }
+            entries.forEach(([label, value], index) => {
+                const item = document.createElement("div");
+                item.className = "legend-item";
+                const swatch = document.createElement("span");
+                swatch.className = "legend-swatch";
+                swatch.style.background = colors[index % colors.length];
+                const text = document.createElement("span");
+                text.textContent = `${label} ${((value / total) * 100).toFixed(0)}%`;
+                item.append(swatch, text);
+                distributionLegend.appendChild(item);
+            });
+        }
+    };
+
+    const renderRentabilityTable = (items) => {
+        const rows = items.map((item) => {
+            const invested = getInvestmentTotal(item);
+            const current = getInvestmentCurrentValue(item);
+            const profit = current - invested;
+            const rentability = invested > 0 ? (profit / invested) * 100 : 0;
+            return { item, invested, current, profit, rentability };
+        });
+
+        const sortBy = sortSelect.value;
+        rows.sort((a, b) => {
+            if (sortBy === "profit") {
+                return b.profit - a.profit;
+            }
+            if (sortBy === "invested") {
+                return b.invested - a.invested;
+            }
+            return b.rentability - a.rentability;
+        });
+
+        if (!rows.length) {
+            setTableEmpty(rentabilityTable, 5, "Nenhum ativo encontrado.");
+            return;
+        }
+
+        rentabilityTable.innerHTML = "";
+        rows.forEach((row) => {
+            const tr = document.createElement("tr");
+            const profitClass = row.profit >= 0 ? "positive-value" : "negative-value";
+            tr.innerHTML = `
+                <td>${row.item.name}</td>
+                <td>${formatCurrency(row.invested)}</td>
+                <td>${formatCurrency(row.current)}</td>
+                <td class="${profitClass}">${formatCurrency(row.profit)}</td>
+                <td class="${profitClass}">${formatPercent(row.rentability)}</td>
+            `;
+            rentabilityTable.appendChild(tr);
+        });
+    };
+
+    const renderMovementTable = (items) => {
+        if (!items.length) {
+            setTableEmpty(movementTable, 4, "Nenhuma movimentacao encontrada.");
+            return;
+        }
+
+        movementTable.innerHTML = "";
+        items.forEach((item) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${item.type}</td>
+                <td>${item.description}</td>
+                <td>${formatCurrency(item.amount)}</td>
+                <td>${formatDate(item.date)}</td>
+            `;
+            movementTable.appendChild(tr);
+        });
+    };
+
+    const renderInsights = (items) => {
+        if (!insights) {
+            return;
+        }
+
+        const invested = items.reduce((total, item) => total + getInvestmentTotal(item), 0);
+        const current = items.reduce((total, item) => total + getInvestmentCurrentValue(item), 0);
+        const profit = current - invested;
+        const growth = invested > 0 ? (profit / invested) * 100 : 0;
+        const dividends = transactions.filter((item) => item.type === "dividendo").reduce((total, item) => total + (Number(item.amount) || 0), 0);
+        const largest = items.reduce((max, item) => Math.max(max, getInvestmentCurrentValue(item)), 0);
+        const largestPercent = current > 0 ? (largest / current) * 100 : 0;
+        const typeTotals = {};
+        items.forEach((item) => {
+            const label = normalizeAssetType(item.type);
+            typeTotals[label] = (typeTotals[label] || 0) + getInvestmentCurrentValue(item);
+        });
+        const dominant = Object.entries(typeTotals).sort((a, b) => b[1] - a[1])[0]?.[0] || "ativos";
+
+        const messages = [
+            `Sua carteira cresceu ${formatPercent(growth)} no periodo selecionado.`,
+            `Voce recebeu ${formatCurrency(dividends)} em dividendos.`,
+            `Seu maior ativo representa ${largestPercent.toFixed(0)}% da carteira.`,
+            `Sua carteira esta concentrada em ${dominant}.`,
+        ];
+
+        insights.innerHTML = "";
+        messages.forEach((message) => {
+            const item = document.createElement("div");
+            item.className = "insight-item";
+            item.textContent = message;
+            insights.appendChild(item);
+        });
+    };
+
+    const renderReports = () => {
+        const filteredInvestments = getFilteredInvestments();
+        renderReportCards(filteredInvestments);
+        renderLineChart(filteredInvestments);
+        renderDistribution(filteredInvestments);
+        renderRentabilityTable(filteredInvestments);
+        renderMovementTable(getFilteredMovements());
+        renderInsights(filteredInvestments);
+    };
+
+    reportFilterForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        renderReports();
+    });
+
+    movementFilterForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        renderMovementTable(getFilteredMovements());
+    });
+
+    sortSelect.addEventListener("change", () => {
+        renderRentabilityTable(getFilteredInvestments());
+    });
+
+    document.querySelector('[data-action="clear-report-filters"]')?.addEventListener("click", () => {
+        reportFilterForm.reset();
+        renderReports();
+    });
+
+    document.querySelector('[data-action="clear-movement-filters"]')?.addEventListener("click", () => {
+        movementFilterForm.reset();
+        renderMovementTable(getFilteredMovements());
+    });
+
+    document.querySelector('[data-action="export-report-pdf"]')?.addEventListener("click", () => {
+        window.print();
+    });
+
+    (async () => {
+        const data = await loadFinanceData();
+        investments = data.investments;
+        transactions = data.transactions;
+        renderReports();
+    })();
+};
+
+initReportsPage();
 
 const initDashboardSummary = () => {
     const page = document.querySelector('[data-page="dashboard"]');

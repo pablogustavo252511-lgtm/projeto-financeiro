@@ -669,7 +669,7 @@ const serveFile = (res, filePath) => {
     res.end(file);
 };
 
-const isProtectedPath = (pathname) => ["/dashboard.html", "/carteira.html", "/transacoes.html"].includes(pathname);
+const isProtectedPath = (pathname) => ["/dashboard.html", "/carteira.html", "/transacoes.html", "/relatorios.html"].includes(pathname);
 const isAuthPath = (pathname) => ["/login.html", "/register.html"].includes(pathname);
 
 const server = http.createServer(async (req, res) => {
