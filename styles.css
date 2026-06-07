@@ -771,6 +771,92 @@ body.modal-open {
     color: #ffd2d2;
 }
 
+.account-cards {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.account-form {
+    display: grid;
+    gap: 14px;
+}
+
+.account-fields,
+.preference-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.account-fields > div,
+.preference-item {
+    display: grid;
+    gap: 8px;
+}
+
+.account-form label,
+.preference-item span {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(230, 238, 249, 0.7);
+}
+
+.account-form input,
+.account-form select,
+.preference-item select {
+    width: 100%;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    color: #e6eef9;
+    padding: 0 12px;
+    outline: none;
+}
+
+.account-form input:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.account-form select option {
+    background-color: #1a2233;
+    color: #e6eef9;
+}
+
+.preference-item {
+    padding: 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.preference-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #6fd3ff;
+}
+
+.account-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.danger-button {
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 120, 120, 0.6);
+    background: rgba(255, 80, 80, 0.14);
+    color: #ffd2d2;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0 14px;
+}
+
+.danger-button:hover {
+    background: rgba(255, 80, 80, 0.24);
+}
+
 @media (max-width: 900px) {
     body.dashboard-body {
         padding: 16px;

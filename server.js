@@ -142,6 +142,15 @@ const mapUser = (row) => row ? {
     salt: row.salt,
     hash: row.hash,
     createdAt: toCamelDate(row.created_at),
+    name: row.name || "",
+    phone: row.phone || "",
+    cpf: row.cpf || "",
+    birthDate: row.birth_date || "",
+    currency: row.currency || "BRL",
+    theme: row.theme || "dark",
+    emailNotifications: Boolean(row.email_notifications),
+    showFinancialValues: row.show_financial_values !== false,
+    lastAccess: toCamelDate(row.last_access),
 } : null;
 
 const mapInvestment = (row) => row ? {
@@ -175,7 +184,16 @@ const initDatabase = async () => {
             email TEXT PRIMARY KEY,
             salt TEXT NOT NULL,
             hash TEXT NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            name TEXT,
+            phone TEXT,
+            cpf TEXT,
+            birth_date TEXT,
+            currency TEXT NOT NULL DEFAULT 'BRL',
+            theme TEXT NOT NULL DEFAULT 'dark',
+            email_notifications BOOLEAN NOT NULL DEFAULT true,
+            show_financial_values BOOLEAN NOT NULL DEFAULT true,
+            last_access TIMESTAMPTZ
         );
 
         CREATE TABLE IF NOT EXISTS sessions (
@@ -210,6 +228,15 @@ const initDatabase = async () => {
     `);
 
     await pool.query("ALTER TABLE investments ADD COLUMN IF NOT EXISTS earning NUMERIC");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf TEXT");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date TEXT");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'BRL'");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'dark'");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN NOT NULL DEFAULT true");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS show_financial_values BOOLEAN NOT NULL DEFAULT true");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_access TIMESTAMPTZ");
 };
 
 const migrateJsonToDatabase = async () => {
@@ -223,10 +250,24 @@ const migrateJsonToDatabase = async () => {
             continue;
         }
         await pool.query(
-            `INSERT INTO users (email, salt, hash, created_at)
-             VALUES ($1, $2, $3, $4)
+            `INSERT INTO users (email, salt, hash, created_at, name, phone, cpf, birth_date, currency, theme, email_notifications, show_financial_values, last_access)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
              ON CONFLICT (email) DO NOTHING`,
-            [user.email, user.salt, user.hash, user.createdAt || new Date().toISOString()]
+            [
+                user.email,
+                user.salt,
+                user.hash,
+                user.createdAt || new Date().toISOString(),
+                user.name || "",
+                user.phone || "",
+                user.cpf || "",
+                user.birthDate || "",
+                user.currency || "BRL",
+                user.theme || "dark",
+                user.emailNotifications !== false,
+                user.showFinancialValues !== false,
+                user.lastAccess || null,
+            ]
         );
     }
 
@@ -293,8 +334,70 @@ const fileStorage = {
     findUser: async (email) => readUsers().find((user) => user.email === email) || null,
     createUser: async (user) => {
         const users = readUsers();
-        users.push(user);
+        users.push({
+            ...user,
+            name: user.name || "",
+            phone: "",
+            cpf: "",
+            birthDate: "",
+            currency: "BRL",
+            theme: "dark",
+            emailNotifications: true,
+            showFinancialValues: true,
+            lastAccess: null,
+        });
         writeUsers(users);
+    },
+    updateUserProfile: async (email, updates) => {
+        const users = readUsers();
+        const index = users.findIndex((user) => user.email === email);
+        if (index === -1) {
+            return null;
+        }
+        const nextEmail = updates.email;
+        if (nextEmail !== email && users.some((user) => user.email === nextEmail)) {
+            return { error: "Email ja cadastrado." };
+        }
+        users[index] = { ...users[index], ...updates };
+        writeUsers(users);
+
+        if (nextEmail !== email) {
+            [INVESTMENTS_FILE, TRANSACTIONS_FILE].forEach((filePath) => {
+                const store = readStore(filePath);
+                if (store[email]) {
+                    store[nextEmail] = store[email];
+                    delete store[email];
+                    writeStore(filePath, store);
+                }
+            });
+            sessions.forEach((session) => {
+                if (session.email === email) {
+                    session.email = nextEmail;
+                }
+            });
+            writeSessions();
+        }
+        return users[index];
+    },
+    updateUserPreferences: async (email, updates) => {
+        const users = readUsers();
+        const index = users.findIndex((user) => user.email === email);
+        if (index === -1) {
+            return null;
+        }
+        users[index] = { ...users[index], ...updates };
+        writeUsers(users);
+        return users[index];
+    },
+    updateUserLastAccess: async (email) => {
+        const users = readUsers();
+        const index = users.findIndex((user) => user.email === email);
+        if (index === -1) {
+            return null;
+        }
+        users[index] = { ...users[index], lastAccess: new Date().toISOString() };
+        writeUsers(users);
+        return users[index];
     },
     updateUserPassword: async (email, salt, hash) => {
         const users = readUsers();
@@ -404,9 +507,86 @@ const databaseStorage = {
     },
     createUser: async (user) => {
         await pool.query(
-            "INSERT INTO users (email, salt, hash, created_at) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO users (email, salt, hash, created_at, currency, theme, email_notifications, show_financial_values) VALUES ($1, $2, $3, $4, 'BRL', 'dark', true, true)",
             [user.email, user.salt, user.hash, user.createdAt]
         );
+    },
+    updateUserProfile: async (email, updates) => {
+        const nextEmail = updates.email;
+        if (nextEmail !== email) {
+            const existing = await pool.query("SELECT email FROM users WHERE email = $1", [nextEmail]);
+            if (existing.rowCount) {
+                return { error: "Email ja cadastrado." };
+            }
+            const client = await pool.connect();
+            try {
+                await client.query("BEGIN");
+                const current = await client.query("SELECT * FROM users WHERE email = $1", [email]);
+                if (!current.rowCount) {
+                    await client.query("ROLLBACK");
+                    return null;
+                }
+                const user = current.rows[0];
+                await client.query(
+                    `INSERT INTO users (email, salt, hash, created_at, name, phone, cpf, birth_date, currency, theme, email_notifications, show_financial_values, last_access)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                    [
+                        nextEmail,
+                        user.salt,
+                        user.hash,
+                        user.created_at,
+                        updates.name,
+                        updates.phone,
+                        updates.cpf,
+                        updates.birthDate,
+                        user.currency,
+                        user.theme,
+                        user.email_notifications,
+                        user.show_financial_values,
+                        user.last_access,
+                    ]
+                );
+                await client.query("UPDATE investments SET user_email = $2 WHERE user_email = $1", [email, nextEmail]);
+                await client.query("UPDATE transactions SET user_email = $2 WHERE user_email = $1", [email, nextEmail]);
+                await client.query("UPDATE sessions SET email = $2 WHERE email = $1", [email, nextEmail]);
+                await client.query("DELETE FROM users WHERE email = $1", [email]);
+                await client.query("COMMIT");
+                sessions.forEach((session) => {
+                    if (session.email === email) {
+                        session.email = nextEmail;
+                    }
+                });
+                return mapUser({ ...user, email: nextEmail, name: updates.name, phone: updates.phone, cpf: updates.cpf, birth_date: updates.birthDate });
+            } catch (error) {
+                await client.query("ROLLBACK");
+                throw error;
+            } finally {
+                client.release();
+            }
+        }
+
+        const result = await pool.query(
+            `UPDATE users
+             SET name = $2, phone = $3, cpf = $4, birth_date = $5
+             WHERE email = $1
+             RETURNING *`,
+            [email, updates.name, updates.phone, updates.cpf, updates.birthDate]
+        );
+        return mapUser(result.rows[0]);
+    },
+    updateUserPreferences: async (email, updates) => {
+        const result = await pool.query(
+            `UPDATE users
+             SET currency = $2, theme = $3, email_notifications = $4, show_financial_values = $5
+             WHERE email = $1
+             RETURNING *`,
+            [email, updates.currency, updates.theme, updates.emailNotifications, updates.showFinancialValues]
+        );
+        return mapUser(result.rows[0]);
+    },
+    updateUserLastAccess: async (email) => {
+        const result = await pool.query("UPDATE users SET last_access = NOW() WHERE email = $1 RETURNING *", [email]);
+        return mapUser(result.rows[0]);
     },
     updateUserPassword: async (email, salt, hash) => {
         const result = await pool.query("UPDATE users SET salt = $2, hash = $3 WHERE email = $1", [email, salt, hash]);
@@ -669,7 +849,7 @@ const serveFile = (res, filePath) => {
     res.end(file);
 };
 
-const isProtectedPath = (pathname) => ["/dashboard.html", "/carteira.html", "/transacoes.html", "/relatorios.html"].includes(pathname);
+const isProtectedPath = (pathname) => ["/dashboard.html", "/carteira.html", "/transacoes.html", "/relatorios.html", "/conta.html"].includes(pathname);
 const isAuthPath = (pathname) => ["/login.html", "/register.html"].includes(pathname);
 
 const server = http.createServer(async (req, res) => {
@@ -743,6 +923,7 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
+            await storage.updateUserLastAccess(normalizedEmail);
             await createSession(res, normalizedEmail);
             sendJson(res, 200, { email: normalizedEmail });
         } catch {
@@ -771,6 +952,173 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 200, {
             storage: pool ? "PostgreSQL" : "JSON local",
             databaseConfigured: Boolean(DATABASE_URL),
+        });
+        return;
+    }
+
+    if (pathname === "/api/account" && req.method === "GET") {
+        const email = await requireAuth(req, res);
+        if (!email) {
+            return;
+        }
+        const user = await storage.findUser(email);
+        if (!user) {
+            sendJson(res, 404, { message: "Usuario nao encontrado." });
+            return;
+        }
+        const investments = await storage.listInvestments(email);
+        const transactions = await storage.listTransactions(email);
+        const patrimony = investments.reduce((total, item) => {
+            const value = Number(item.value) || 0;
+            const quantity = Number(item.quantity);
+            const invested = Number.isFinite(quantity) && quantity > 0 ? quantity * value : value;
+            return total + invested;
+        }, 0);
+        sendJson(res, 200, {
+            user: {
+                email: user.email,
+                name: user.name || "",
+                phone: user.phone || "",
+                cpf: user.cpf || "",
+                birthDate: user.birthDate || "",
+                createdAt: user.createdAt || null,
+                lastAccess: user.lastAccess || null,
+                currency: user.currency || "BRL",
+                theme: user.theme || "dark",
+                emailNotifications: user.emailNotifications !== false,
+                showFinancialValues: user.showFinancialValues !== false,
+            },
+            summary: {
+                investmentsCount: investments.length,
+                transactionsCount: transactions.length,
+                patrimony,
+            },
+        });
+        return;
+    }
+
+    if (pathname === "/api/account" && req.method === "PUT") {
+        const email = await requireAuth(req, res);
+        if (!email) {
+            return;
+        }
+        try {
+            const payload = await parseJsonBody(req);
+            const name = String(payload.name || "").trim();
+            const nextEmail = normalizeEmail(payload.email);
+            if (!name) {
+                sendJson(res, 400, { message: "Nome obrigatorio." });
+                return;
+            }
+            if (!nextEmail) {
+                sendJson(res, 400, { message: "Email obrigatorio." });
+                return;
+            }
+            if (!isGmail(nextEmail)) {
+                sendJson(res, 400, { message: "Use um email @gmail.com." });
+                return;
+            }
+            const updated = await storage.updateUserProfile(email, {
+                name,
+                email: nextEmail,
+                phone: String(payload.phone || "").trim(),
+                cpf: String(payload.cpf || "").trim(),
+                birthDate: String(payload.birthDate || "").trim(),
+            });
+            if (!updated) {
+                sendJson(res, 404, { message: "Usuario nao encontrado." });
+                return;
+            }
+            if (updated.error) {
+                sendJson(res, 409, { message: updated.error });
+                return;
+            }
+            sendJson(res, 200, { user: updated });
+        } catch {
+            sendJson(res, 400, { message: "Dados invalidos." });
+        }
+        return;
+    }
+
+    if (pathname === "/api/account/preferences" && req.method === "PUT") {
+        const email = await requireAuth(req, res);
+        if (!email) {
+            return;
+        }
+        try {
+            const payload = await parseJsonBody(req);
+            const updated = await storage.updateUserPreferences(email, {
+                currency: "BRL",
+                theme: "dark",
+                emailNotifications: Boolean(payload.emailNotifications),
+                showFinancialValues: payload.showFinancialValues !== false,
+            });
+            if (!updated) {
+                sendJson(res, 404, { message: "Usuario nao encontrado." });
+                return;
+            }
+            sendJson(res, 200, { user: updated });
+        } catch {
+            sendJson(res, 400, { message: "Dados invalidos." });
+        }
+        return;
+    }
+
+    if (pathname === "/api/account/password" && req.method === "PUT") {
+        const email = await requireAuth(req, res);
+        if (!email) {
+            return;
+        }
+        try {
+            const { currentPassword, newPassword } = await parseJsonBody(req);
+            const user = await storage.findUser(email);
+            if (!user || !verifyPassword(currentPassword || "", user.salt, user.hash)) {
+                sendJson(res, 401, { message: "Senha atual incorreta." });
+                return;
+            }
+            if (!isValidPassword(newPassword)) {
+                sendJson(res, 400, { message: "Nova senha precisa ter pelo menos 6 caracteres." });
+                return;
+            }
+            const { salt, hash } = hashPassword(newPassword);
+            const updated = await storage.updateUserPassword(email, salt, hash);
+            if (!updated) {
+                sendJson(res, 404, { message: "Usuario nao encontrado." });
+                return;
+            }
+            sendJson(res, 200, { message: "Senha atualizada." });
+        } catch {
+            sendJson(res, 400, { message: "Dados invalidos." });
+        }
+        return;
+    }
+
+    if (pathname === "/api/account/export" && req.method === "GET") {
+        const email = await requireAuth(req, res);
+        if (!email) {
+            return;
+        }
+        const user = await storage.findUser(email);
+        const investments = await storage.listInvestments(email);
+        const transactions = await storage.listTransactions(email);
+        sendJson(res, 200, {
+            user: {
+                email: user.email,
+                name: user.name || "",
+                phone: user.phone || "",
+                cpf: user.cpf || "",
+                birthDate: user.birthDate || "",
+                createdAt: user.createdAt || null,
+                lastAccess: user.lastAccess || null,
+                preferences: {
+                    currency: user.currency || "BRL",
+                    theme: user.theme || "dark",
+                    emailNotifications: user.emailNotifications !== false,
+                    showFinancialValues: user.showFinancialValues !== false,
+                },
+            },
+            investments,
+            transactions,
         });
         return;
     }
@@ -1143,6 +1491,11 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === "/transacoes") {
         redirect(res, "/transacoes.html");
+        return;
+    }
+
+    if (pathname === "/conta") {
+        redirect(res, "/conta.html");
         return;
     }
 

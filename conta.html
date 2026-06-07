@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>conta investidor</title>
+</head>
+<body class="dashboard-body" data-page="conta">
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-mark">INV</span>
+                <div class="brand-text">
+                    <span class="brand-title">investidor</span>
+                    <span class="brand-subtitle">painel</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="tab" href="dashboard.html">visao geral</a>
+                <a class="tab" href="carteira.html">carteira</a>
+                <a class="tab" href="/transacoes.html">transacoes</a>
+                <a class="tab" href="/relatorios.html">relatorios</a>
+                <a class="tab active" href="/conta.html">conta</a>
+                <a class="tab" href="#">configuracoes</a>
+            </nav>
+            <button class="logout-button" type="button" data-action="logout">sair</button>
+        </aside>
+
+        <main class="dashboard-content">
+            <header class="content-header">
+                <div>
+                    <p class="eyebrow">conta ativa</p>
+                    <h1>conta</h1>
+                    <p class="subtle">Bem vindo, <span data-user-email></span></p>
+                </div>
+                <div class="status-pill">online</div>
+            </header>
+
+            <section class="cards account-cards">
+                <article class="card">
+                    <p class="card-label">nome do usuario</p>
+                    <h2 data-account="name">-</h2>
+                    <p class="card-detail">dados pessoais</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">email cadastrado</p>
+                    <h2 data-account="email">-</h2>
+                    <p class="card-detail">acesso principal</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">tipo da conta</p>
+                    <h2>Investidor</h2>
+                    <p class="card-detail">perfil padrao</p>
+                </article>
+                <article class="card">
+                    <p class="card-label">status da conta</p>
+                    <h2>Ativa</h2>
+                    <p class="card-detail">online</p>
+                </article>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>dados pessoais</h3>
+                    <span class="panel-tag">perfil</span>
+                </div>
+                <form class="account-form" data-form="account-profile">
+                    <div class="account-fields">
+                        <div>
+                            <label for="account-name">nome completo</label>
+                            <input id="account-name" name="name" type="text" disabled required>
+                        </div>
+                        <div>
+                            <label for="account-email">email</label>
+                            <input id="account-email" name="email" type="email" disabled required>
+                        </div>
+                        <div>
+                            <label for="account-phone">telefone</label>
+                            <input id="account-phone" name="phone" type="tel" disabled>
+                        </div>
+                        <div>
+                            <label for="account-cpf">cpf</label>
+                            <input id="account-cpf" name="cpf" type="text" disabled>
+                        </div>
+                        <div>
+                            <label for="account-birth">data de nascimento</label>
+                            <input id="account-birth" name="birthDate" type="date" disabled>
+                        </div>
+                    </div>
+                    <div class="crud-actions">
+                        <button class="ghost-button" type="button" data-action="edit-account">editar dados</button>
+                        <button class="secondary-button" type="submit" data-action="save-account" hidden>salvar alteracoes</button>
+                        <button class="ghost-button" type="button" data-action="cancel-account" hidden>cancelar</button>
+                    </div>
+                    <p class="form-message" data-message="account-profile"></p>
+                </form>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>seguranca</h3>
+                    <span class="panel-tag">senha</span>
+                </div>
+                <form class="account-form" data-form="account-password">
+                    <div class="account-fields">
+                        <div>
+                            <label for="current-password">senha atual</label>
+                            <input id="current-password" name="currentPassword" type="password" autocomplete="current-password">
+                        </div>
+                        <div>
+                            <label for="new-password">nova senha</label>
+                            <input id="new-password" name="newPassword" type="password" autocomplete="new-password">
+                        </div>
+                        <div>
+                            <label for="confirm-password">confirmar nova senha</label>
+                            <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="crud-actions">
+                        <button class="secondary-button" type="submit">alterar senha</button>
+                    </div>
+                    <p class="form-message" data-message="account-password"></p>
+                </form>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>preferencias</h3>
+                    <span class="panel-tag">sistema</span>
+                </div>
+                <form class="account-form" data-form="account-preferences">
+                    <div class="preference-grid">
+                        <label class="preference-item">
+                            <span>moeda padrao</span>
+                            <select name="currency">
+                                <option value="BRL">BRL</option>
+                            </select>
+                        </label>
+                        <label class="preference-item">
+                            <span>tema</span>
+                            <select name="theme">
+                                <option value="dark">Escuro</option>
+                            </select>
+                        </label>
+                        <label class="preference-item">
+                            <span>notificacoes por email</span>
+                            <input name="emailNotifications" type="checkbox">
+                        </label>
+                        <label class="preference-item">
+                            <span>mostrar valores financeiros</span>
+                            <input name="showFinancialValues" type="checkbox">
+                        </label>
+                    </div>
+                    <div class="crud-actions">
+                        <button class="secondary-button" type="submit">salvar preferencias</button>
+                    </div>
+                    <p class="form-message" data-message="account-preferences"></p>
+                </form>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>resumo da conta</h3>
+                    <span class="panel-tag">dados</span>
+                </div>
+                <div class="panel-grid">
+                    <div class="panel-item">
+                        <p class="panel-title">data de criacao</p>
+                        <p class="panel-detail" data-account-summary="created-at">-</p>
+                    </div>
+                    <div class="panel-item">
+                        <p class="panel-title">ultimo acesso</p>
+                        <p class="panel-detail" data-account-summary="last-access">-</p>
+                    </div>
+                    <div class="panel-item">
+                        <p class="panel-title">investimentos</p>
+                        <p class="panel-detail" data-account-summary="investments-count">0</p>
+                    </div>
+                    <div class="panel-item">
+                        <p class="panel-title">transacoes</p>
+                        <p class="panel-detail" data-account-summary="transactions-count">0</p>
+                    </div>
+                    <div class="panel-item">
+                        <p class="panel-title">patrimonio atual</p>
+                        <p class="panel-detail" data-account-summary="patrimony">R$ 0,00</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h3>acoes da conta</h3>
+                    <span class="panel-tag">controle</span>
+                </div>
+                <div class="account-actions">
+                    <button class="ghost-button" type="button" data-action="account-logout">sair da conta</button>
+                    <button class="ghost-button" type="button" data-action="export-account">exportar dados da conta</button>
+                    <button class="danger-button" type="button" data-action="delete-account">excluir conta</button>
+                </div>
+                <p class="form-message" data-message="account-actions"></p>
+            </section>
+        </main>
+    </div>
+    <script src="script.js" defer></script>
+</body>
+</html>

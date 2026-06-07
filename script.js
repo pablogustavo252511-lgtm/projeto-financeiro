@@ -141,6 +141,9 @@ document.querySelectorAll(".sidebar-nav .tab").forEach((link) => {
     if (link.textContent.trim().toLowerCase() === "relatorios") {
         link.setAttribute("href", "/relatorios.html");
     }
+    if (link.textContent.trim().toLowerCase() === "conta") {
+        link.setAttribute("href", "/conta.html");
+    }
 });
 
 const protectedPage = document.querySelector("[data-page]");
@@ -318,6 +321,214 @@ const setTableEmpty = (tbody, colspan, message) => {
     row.appendChild(cell);
     tbody.appendChild(row);
 };
+
+const initAccountPage = () => {
+    const page = document.querySelector('[data-page="conta"]');
+    if (!page) {
+        return;
+    }
+
+    const profileForm = document.querySelector('[data-form="account-profile"]');
+    const passwordForm = document.querySelector('[data-form="account-password"]');
+    const preferencesForm = document.querySelector('[data-form="account-preferences"]');
+    const editButton = document.querySelector('[data-action="edit-account"]');
+    const saveButton = document.querySelector('[data-action="save-account"]');
+    const cancelButton = document.querySelector('[data-action="cancel-account"]');
+    const profileMessage = document.querySelector('[data-message="account-profile"]');
+    const passwordMessage = document.querySelector('[data-message="account-password"]');
+    const preferencesMessage = document.querySelector('[data-message="account-preferences"]');
+    const actionsMessage = document.querySelector('[data-message="account-actions"]');
+
+    if (!profileForm || !passwordForm || !preferencesForm || !editButton || !saveButton || !cancelButton) {
+        return;
+    }
+
+    let accountData = null;
+
+    const profileInputs = Array.from(profileForm.querySelectorAll("input"));
+    const profileName = profileForm.querySelector('[name="name"]');
+    const profileEmail = profileForm.querySelector('[name="email"]');
+    const profilePhone = profileForm.querySelector('[name="phone"]');
+    const profileCpf = profileForm.querySelector('[name="cpf"]');
+    const profileBirthDate = profileForm.querySelector('[name="birthDate"]');
+    const prefCurrency = preferencesForm.querySelector('[name="currency"]');
+    const prefTheme = preferencesForm.querySelector('[name="theme"]');
+    const prefEmailNotifications = preferencesForm.querySelector('[name="emailNotifications"]');
+    const prefShowFinancialValues = preferencesForm.querySelector('[name="showFinancialValues"]');
+    const currentPasswordInput = passwordForm.querySelector('[name="currentPassword"]');
+    const newPasswordInput = passwordForm.querySelector('[name="newPassword"]');
+    const confirmPasswordInput = passwordForm.querySelector('[name="confirmPassword"]');
+
+    const setProfileEnabled = (enabled) => {
+        profileInputs.forEach((input) => {
+            input.disabled = !enabled;
+        });
+        editButton.hidden = enabled;
+        saveButton.hidden = !enabled;
+        cancelButton.hidden = !enabled;
+    };
+
+    const fillAccount = (data) => {
+        accountData = data;
+        const user = data.user || {};
+        profileName.value = user.name || "";
+        profileEmail.value = user.email || "";
+        profilePhone.value = user.phone || "";
+        profileCpf.value = user.cpf || "";
+        profileBirthDate.value = user.birthDate || "";
+
+        prefCurrency.value = user.currency || "BRL";
+        prefTheme.value = user.theme || "dark";
+        prefEmailNotifications.checked = user.emailNotifications !== false;
+        prefShowFinancialValues.checked = user.showFinancialValues !== false;
+
+        setText('[data-account="name"]', user.name || "sem nome");
+        setText('[data-account="email"]', user.email || "-");
+        setText('[data-account-summary="created-at"]', formatDate(user.createdAt));
+        setText('[data-account-summary="last-access"]', user.lastAccess ? formatDate(user.lastAccess) : "primeiro acesso");
+        setText('[data-account-summary="investments-count"]', data.summary?.investmentsCount ?? 0);
+        setText('[data-account-summary="transactions-count"]', data.summary?.transactionsCount ?? 0);
+        setText('[data-account-summary="patrimony"]', formatCurrency(data.summary?.patrimony || 0));
+
+        const emailTarget = document.querySelector("[data-user-email]");
+        if (emailTarget && user.email) {
+            emailTarget.textContent = user.email;
+        }
+    };
+
+    const loadAccount = async () => {
+        const result = await getJson("/api/account");
+        if (!result.ok) {
+            setMessage(profileMessage, result.data?.message || "Nao foi possivel carregar a conta.", "error");
+            return;
+        }
+        fillAccount(result.data);
+        setProfileEnabled(false);
+    };
+
+    editButton.addEventListener("click", () => {
+        setMessage(profileMessage, "");
+        setProfileEnabled(true);
+    });
+
+    cancelButton.addEventListener("click", () => {
+        if (accountData) {
+            fillAccount(accountData);
+        }
+        setMessage(profileMessage, "");
+        setProfileEnabled(false);
+    });
+
+    profileForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const payload = {
+            name: profileName.value.trim(),
+            email: normalizeEmail(profileEmail.value),
+            phone: profilePhone.value.trim(),
+            cpf: profileCpf.value.trim(),
+            birthDate: profileBirthDate.value,
+        };
+
+        if (!payload.name) {
+            setMessage(profileMessage, "Nome obrigatorio.", "error");
+            return;
+        }
+        if (!payload.email) {
+            setMessage(profileMessage, "Email obrigatorio.", "error");
+            return;
+        }
+
+        const result = await requestJson("/api/account", { method: "PUT", payload });
+        if (!result.ok) {
+            setMessage(profileMessage, result.data?.message || "Nao foi possivel salvar os dados.", "error");
+            return;
+        }
+        setMessage(profileMessage, "Dados atualizados.", "success");
+        await loadAccount();
+    });
+
+    passwordForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const currentPassword = currentPasswordInput.value;
+        const newPassword = newPasswordInput.value;
+        const confirmPassword = confirmPasswordInput.value;
+
+        if (newPassword.length < 6) {
+            setMessage(passwordMessage, "Nova senha precisa ter pelo menos 6 caracteres.", "error");
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setMessage(passwordMessage, "Confirmacao diferente da nova senha.", "error");
+            return;
+        }
+
+        const result = await requestJson("/api/account/password", {
+            method: "PUT",
+            payload: { currentPassword, newPassword },
+        });
+        if (!result.ok) {
+            setMessage(passwordMessage, result.data?.message || "Nao foi possivel alterar a senha.", "error");
+            return;
+        }
+        passwordForm.reset();
+        setMessage(passwordMessage, "Senha atualizada.", "success");
+    });
+
+    preferencesForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const result = await requestJson("/api/account/preferences", {
+            method: "PUT",
+            payload: {
+                emailNotifications: prefEmailNotifications.checked,
+                showFinancialValues: prefShowFinancialValues.checked,
+            },
+        });
+        if (!result.ok) {
+            setMessage(preferencesMessage, result.data?.message || "Nao foi possivel salvar preferencias.", "error");
+            return;
+        }
+        setMessage(preferencesMessage, "Preferencias atualizadas.", "success");
+        await loadAccount();
+    });
+
+    document.querySelector('[data-action="account-logout"]')?.addEventListener("click", async () => {
+        await postJson("/api/logout", {});
+        window.location.href = "login.html";
+    });
+
+    document.querySelector('[data-action="export-account"]')?.addEventListener("click", async () => {
+        const result = await getJson("/api/account/export");
+        if (!result.ok) {
+            setMessage(actionsMessage, result.data?.message || "Nao foi possivel exportar dados.", "error");
+            return;
+        }
+        const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "dados-da-conta.json";
+        link.click();
+        URL.revokeObjectURL(url);
+        setMessage(actionsMessage, "Dados exportados.", "success");
+    });
+
+    document.querySelector('[data-action="delete-account"]')?.addEventListener("click", async () => {
+        const confirmed = window.confirm("Excluir sua conta e todos os dados financeiros?");
+        if (!confirmed) {
+            return;
+        }
+        const result = await requestJson("/api/users/me", { method: "DELETE" });
+        if (!result.ok) {
+            setMessage(actionsMessage, result.data?.message || "Nao foi possivel excluir a conta.", "error");
+            return;
+        }
+        window.location.href = "login.html";
+    });
+
+    loadAccount();
+};
+
+initAccountPage();
 
 const initReportsPage = () => {
     const page = document.querySelector('[data-page="relatorios"]');
@@ -896,6 +1107,7 @@ const initPortfolioCrud = () => {
         const value = rawValue === "" ? undefined : Number(rawValue);
         const rawEarning = investEarning.value.trim();
         const earning = rawEarning === "" ? undefined : Number(rawEarning);
+        const mode = investForm.dataset.mode || "create";
 
         if (!name) {
             setMessage(investMessage, "Informe o nome do ativo.", "error");
@@ -940,7 +1152,6 @@ const initPortfolioCrud = () => {
             payload.earning = earning;
         }
 
-        const mode = investForm.dataset.mode || "create";
         const endpoint = mode === "edit" ? `/api/investments/${investForm.dataset.id}` : "/api/investments";
         const method = mode === "edit" ? "PUT" : "POST";
 
